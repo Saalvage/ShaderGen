@@ -3,7 +3,6 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 using System;
 using System.Collections.Generic;
-using System.CommandLine;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -11,6 +10,7 @@ using System.Text;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Reflection;
+using CommandLine;
 using ShaderGen.Glsl;
 using ShaderGen.Hlsl;
 using ShaderGen.Metal;
@@ -20,6 +20,33 @@ namespace ShaderGen.App
 {
     internal static class Program
     {
+        private class Options
+        {
+            [Option('r', "ref", Required = true, HelpText = "The semicolon-separated list of references to compile against.")]
+            public string ReferenceItemsResponsePath { get; set; }
+
+            [Option('s', "src", Required = true, HelpText = "The semicolon-separated list of source files to compile.")]
+            public string CompileItemsResponsePath { get; set; }
+
+            [Option('o', "out", Required = true, HelpText = "The output path for the generated shaders.")]
+            public string OutputPath { get; set; }
+
+            [Option('g', "genlist", Required = true, HelpText = "The output file to store the list of generated files.")]
+            public string GenListFilePath { get; set; }
+
+            [Option('l', "listall", Required = false, HelpText = "Forces all generated files to be listed in the list file. By default, only bytecode files will be listed and not the original shader code.")]
+            public bool ListAllFiles { get; set; }
+
+            [Option('p', "processor", Required = false, HelpText = "The path of an assembly containing IShaderSetProcessor types to be used to post-process GeneratedShaderSet objects.")]
+            public string ProcessorPath { get; set; }
+
+            [Option("processorargs", Required = false, HelpText = "Custom information passed to IShaderSetProcessor.")]
+            public string ProcessorArgs { get; set; }
+
+            [Option('d', "debug", Required = false, HelpText = "Compiles the shader with debug information when supported.")]
+            public bool Debug { get; set; }
+        }
+
         private static string s_fxcPath;
         private static bool? s_fxcAvailable;
         private static bool? s_glslangValidatorAvailable;
@@ -37,63 +64,50 @@ namespace ShaderGen.App
 
         public static int Main(string[] args)
         {
-            string referenceItemsResponsePath = null;
-            string compileItemsResponsePath = null;
-            string outputPath = null;
-            string genListFilePath = null;
-            bool listAllFiles = false;
-            string processorPath = null;
-            string processorArgs = null;
-            bool debug = false;
-
             for (int i = 0; i < args.Length; i++)
             {
                 args[i] = args[i].Replace("\\\\", "\\");
             }
 
-            ArgumentSyntax.Parse(args, syntax =>
+            var res = Parser.Default.ParseArguments<Options>(args);
+            var opt = res.Value;
+            if (opt == null)
             {
-                syntax.DefineOption("ref", ref referenceItemsResponsePath, true, "The semicolon-separated list of references to compile against.");
-                syntax.DefineOption("src", ref compileItemsResponsePath, true, "The semicolon-separated list of source files to compile.");
-                syntax.DefineOption("out", ref outputPath, true, "The output path for the generated shaders.");
-                syntax.DefineOption("genlist", ref genListFilePath, true, "The output file to store the list of generated files.");
-                syntax.DefineOption("listall", ref listAllFiles, false, "Forces all generated files to be listed in the list file. By default, only bytecode files will be listed and not the original shader code.");
-                syntax.DefineOption("processor", ref processorPath, false, "The path of an assembly containing IShaderSetProcessor types to be used to post-process GeneratedShaderSet objects.");
-                syntax.DefineOption("processorargs", ref processorArgs, false, "Custom information passed to IShaderSetProcessor.");
-                syntax.DefineOption("debug", ref debug, false, "Compiles the shader with debug information when supported.");
-            });
-
-            referenceItemsResponsePath = NormalizePath(referenceItemsResponsePath);
-            compileItemsResponsePath = NormalizePath(compileItemsResponsePath);
-            outputPath = NormalizePath(outputPath);
-            genListFilePath = NormalizePath(genListFilePath);
-            processorPath = NormalizePath(processorPath);
-
-            if (!File.Exists(referenceItemsResponsePath))
-            {
-                Console.Error.WriteLine("Reference items response file does not exist: " + referenceItemsResponsePath);
+                Console.Error.WriteLine("Could not parse arguments!");
                 return -1;
             }
-            if (!File.Exists(compileItemsResponsePath))
+
+            opt.ReferenceItemsResponsePath = NormalizePath(opt.ReferenceItemsResponsePath);
+            opt.CompileItemsResponsePath = NormalizePath(opt.CompileItemsResponsePath);
+            opt.OutputPath = NormalizePath(opt.OutputPath);
+            opt.GenListFilePath = NormalizePath(opt.GenListFilePath);
+            opt.ProcessorPath = NormalizePath(opt.ProcessorPath);
+
+            if (!File.Exists(opt.ReferenceItemsResponsePath))
             {
-                Console.Error.WriteLine("Compile items response file does not exist: " + compileItemsResponsePath);
+                Console.Error.WriteLine("Reference items response file does not exist: " + opt.ReferenceItemsResponsePath);
                 return -1;
             }
-            if (!Directory.Exists(outputPath))
+            if (!File.Exists(opt.CompileItemsResponsePath))
+            {
+                Console.Error.WriteLine("Compile items response file does not exist: " + opt.CompileItemsResponsePath);
+                return -1;
+            }
+            if (!Directory.Exists(opt.OutputPath))
             {
                 try
                 {
-                    Directory.CreateDirectory(outputPath);
+                    Directory.CreateDirectory(opt.OutputPath);
                 }
                 catch
                 {
-                    Console.Error.WriteLine($"Unable to create the output directory \"{outputPath}\".");
+                    Console.Error.WriteLine($"Unable to create the output directory \"{opt.OutputPath}\".");
                     return -1;
                 }
             }
 
-            string[] referenceItems = File.ReadAllLines(referenceItemsResponsePath);
-            string[] compileItems = File.ReadAllLines(compileItemsResponsePath);
+            string[] referenceItems = File.ReadAllLines(opt.ReferenceItemsResponsePath);
+            string[] compileItems = File.ReadAllLines(opt.CompileItemsResponsePath);
 
             List<MetadataReference> references = new List<MetadataReference>();
             foreach (string referencePath in referenceItems)
@@ -148,17 +162,17 @@ namespace ShaderGen.App
             };
 
             List<IShaderSetProcessor> processors = new List<IShaderSetProcessor>();
-            if (processorPath != null)
+            if (opt.ProcessorPath != null)
             {
                 try
                 {
-                    Assembly assm = Assembly.LoadFrom(processorPath);
+                    Assembly assm = Assembly.LoadFrom(opt.ProcessorPath);
                     IEnumerable<Type> processorTypes = assm.GetTypes().Where(
                         t => t.GetInterface(nameof(ShaderGen) + "." + nameof(IShaderSetProcessor)) != null);
                     foreach (Type type in processorTypes)
                     {
                         IShaderSetProcessor processor = (IShaderSetProcessor)Activator.CreateInstance(type);
-                        processor.UserArgs = processorArgs;
+                        processor.UserArgs = opt.ProcessorArgs;
                         processors.Add(processor);
                     }
                 }
@@ -197,7 +211,7 @@ namespace ShaderGen.App
                     if (set.VertexShaderCode != null)
                     {
                         string vsOutName = name + "-vertex." + extension;
-                        string vsOutPath = Path.Combine(outputPath, vsOutName);
+                        string vsOutPath = Path.Combine(opt.OutputPath, vsOutName);
                         File.WriteAllText(vsOutPath, set.VertexShaderCode, outputEncoding);
                         bool succeeded = CompileCode(
                             lang,
@@ -205,12 +219,12 @@ namespace ShaderGen.App
                             set.VertexFunction.Name,
                             ShaderFunctionType.VertexEntryPoint,
                             out string[] genPaths,
-                            debug);
+                            opt.Debug);
                         if (succeeded)
                         {
                             generatedFilePaths.AddRange(genPaths);
                         }
-                        if (!succeeded || listAllFiles)
+                        if (!succeeded || opt.ListAllFiles)
                         {
                             generatedFilePaths.Add(vsOutPath);
                         }
@@ -218,7 +232,7 @@ namespace ShaderGen.App
                     if (set.FragmentShaderCode != null)
                     {
                         string fsOutName = name + "-fragment." + extension;
-                        string fsOutPath = Path.Combine(outputPath, fsOutName);
+                        string fsOutPath = Path.Combine(opt.OutputPath, fsOutName);
                         File.WriteAllText(fsOutPath, set.FragmentShaderCode, outputEncoding);
                         bool succeeded = CompileCode(
                             lang,
@@ -226,12 +240,12 @@ namespace ShaderGen.App
                             set.FragmentFunction.Name,
                             ShaderFunctionType.FragmentEntryPoint,
                             out string[] genPaths,
-                            debug);
+                            opt.Debug);
                         if (succeeded)
                         {
                             generatedFilePaths.AddRange(genPaths);
                         }
-                        if (!succeeded || listAllFiles)
+                        if (!succeeded || opt.ListAllFiles)
                         {
                             generatedFilePaths.Add(fsOutPath);
                         }
@@ -239,7 +253,7 @@ namespace ShaderGen.App
                     if (set.ComputeShaderCode != null)
                     {
                         string csOutName = name + "-compute." + extension;
-                        string csOutPath = Path.Combine(outputPath, csOutName);
+                        string csOutPath = Path.Combine(opt.OutputPath, csOutName);
                         File.WriteAllText(csOutPath, set.ComputeShaderCode, outputEncoding);
                         bool succeeded = CompileCode(
                             lang,
@@ -247,12 +261,12 @@ namespace ShaderGen.App
                             set.ComputeFunction.Name,
                             ShaderFunctionType.ComputeEntryPoint,
                             out string[] genPaths,
-                            debug);
+                            opt.Debug);
                         if (succeeded)
                         {
                             generatedFilePaths.AddRange(genPaths);
                         }
-                        if (!succeeded || listAllFiles)
+                        if (!succeeded || opt.ListAllFiles)
                         {
                             generatedFilePaths.Add(csOutPath);
                         }
@@ -260,7 +274,7 @@ namespace ShaderGen.App
                 }
             }
 
-            File.WriteAllLines(genListFilePath, generatedFilePaths);
+            File.WriteAllLines(opt.GenListFilePath, generatedFilePaths);
 
             return 0;
         }
