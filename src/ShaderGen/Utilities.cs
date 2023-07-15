@@ -135,13 +135,25 @@ namespace ShaderGen
 
         public static string GetFullNamespace(SyntaxNode node)
         {
-            if (!SyntaxNodeHelper.TryGetParentSyntax(node, out NamespaceDeclarationSyntax namespaceDeclarationSyntax))
+            var fileScopedNamespace = node.SyntaxTree.GetRoot()
+                .DescendantNodes()
+                .OfType<FileScopedNamespaceDeclarationSyntax>()
+                .FirstOrDefault();
+
+            // not allowed to be combined with regular namespaces
+            if (fileScopedNamespace != null)
             {
-                return string.Empty; // or whatever you want to do in this scenario
+                return fileScopedNamespace.Name.ToString();
             }
 
-            string namespaceName = namespaceDeclarationSyntax.Name.ToString();
-            return namespaceName;
+            var namespaces = new List<string>();
+            while (SyntaxNodeHelper.TryGetParentSyntax(node, out NamespaceDeclarationSyntax namespaceDeclarationSyntax))
+            {
+                node = namespaceDeclarationSyntax;
+                namespaces.Add(namespaceDeclarationSyntax.Name.ToString());
+            }
+
+            return string.Join('.', ((IEnumerable<string>)namespaces).Reverse());
         }
 
         public static string GetFullNestedTypePrefix(SyntaxNode node, out bool nested)
