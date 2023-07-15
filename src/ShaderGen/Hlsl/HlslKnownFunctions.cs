@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Net.Http.Headers;
 using System.Numerics;
@@ -527,7 +528,7 @@ namespace ShaderGen.Hlsl
         /// <returns></returns>
         private static string Cvc(string typeName, float value)
         {
-            string v = value.ToString("0.0###########");
+            string v = value.ToString("0.0###########", CultureInfo.InvariantCulture);
             if (typeName == "System.Single" || typeName == "float") // TODO Why are we getting float?
             {
                 return v;
