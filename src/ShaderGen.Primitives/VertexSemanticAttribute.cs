@@ -2,7 +2,7 @@
 
 namespace ShaderGen
 {
-    [AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Parameter, AllowMultiple = false)]
     public class VertexSemanticAttribute : Attribute
     {
         public SemanticType Type { get; }

@@ -200,10 +200,12 @@ namespace ShaderGen
             return s_basicNumericTypes.Contains(fullName);
         }
 
-        public static AttributeSyntax[] GetMemberAttributes(CSharpSyntaxNode vds, string name)
+        public static AttributeSyntax[] GetMemberAttributes(CSharpSyntaxNode cssn, string name)
         {
-            return vds.Parent.Parent.DescendantNodes().OfType<AttributeSyntax>()
-                .Where(attrSyntax => attrSyntax.Name.ToString().Contains(name)).ToArray();
+            return (cssn is ParameterSyntax ps
+                    ? ps.AttributeLists.SelectMany(x => x.Attributes)
+                    : cssn.Parent.Parent.DescendantNodes().OfType<AttributeSyntax>()
+                ).Where(attrSyntax => attrSyntax.Name.ToString().Contains(name)).ToArray();
         }
 
         public static AttributeSyntax[] GetMethodAttributes(BaseMethodDeclarationSyntax mds, string name)

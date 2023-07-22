@@ -69,6 +69,7 @@ namespace ShaderGen.Tests
             yield return new object[] { "TestShaders.WhileAndDoWhile.VS", null };
             yield return new object[] { "TestShaders.NamespaceNested.MyShader.VS", null };
             yield return new object[] { "TestShaders.FileScopedNamespaceShader.VS", null };
+            yield return new object[] { "TestShaders.RecordStructs.VS", null };
         }
 
         public static IEnumerable<object[]> ComputeShaders()

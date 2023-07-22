@@ -48,7 +48,7 @@ namespace ShaderGen
             foreach (var b in _backends) { b.AddStructure(_shaderSet.Name, sd); }
         }
 
-        public static bool TryGetStructDefinition(SemanticModel model, StructDeclarationSyntax node, out StructureDefinition sd)
+        private static string GetFullTypeName(TypeDeclarationSyntax node)
         {
             string fullNestedTypePrefix = Utilities.GetFullNestedTypePrefix(node, out bool nested);
             string structName = node.Identifier.ToFullString().Trim();
@@ -57,69 +57,85 @@ namespace ShaderGen
                 string joiner = nested ? "+" : ".";
                 structName = fullNestedTypePrefix + joiner + structName;
             }
+            return structName.Trim();
+        }
 
+        public static bool TryGetStructDefinition(SemanticModel model, TypeDeclarationSyntax node, out StructureDefinition sd)
+        {
             int structCSharpSize = 0;
             int structShaderSize = 0;
             int structCSharpAlignment = 0;
             int structShaderAlignment = 0;
             List<FieldDefinition> fields = new List<FieldDefinition>();
-            foreach (MemberDeclarationSyntax member in node.Members)
+
+            IEnumerable<(CSharpSyntaxNode, SyntaxToken, TypeSyntax)> cSharpFields = node switch
             {
-                if (member is FieldDeclarationSyntax fds && !fds.Modifiers.Any(x => x.IsKind(SyntaxKind.ConstKeyword)))
+                StructDeclarationSyntax sds => sds.Members
+                    .OfType<FieldDeclarationSyntax>()
+                    .Where(x => !x.Modifiers.Any(x => x.IsKind(SyntaxKind.ConstKeyword)))
+                    .SelectMany(x => x.Declaration.Variables,
+                        (x, y) => ((CSharpSyntaxNode)y, y.Identifier, x.Declaration.Type)),
+                RecordDeclarationSyntax {ParameterList: { }} cds when cds.IsKind(SyntaxKind.RecordStructDeclaration)
+                        => cds.ParameterList.Parameters
+                    .Select(x => ((CSharpSyntaxNode)x, x.Identifier, x.Type)),
+                _ => null,
+            };
+            if (cSharpFields is null)
+            {
+                sd = null;
+                return false;
+            }
+
+            foreach (var (declaration, identifier, type) in cSharpFields)
+            {
+                string fieldName = identifier.Text.Trim();
+                string typeName = model.GetFullTypeName(type, out bool isArray);
+                int arrayElementCount = 0;
+                if (isArray)
                 {
-                    VariableDeclarationSyntax varDecl = fds.Declaration;
-                    foreach (VariableDeclaratorSyntax vds in varDecl.Variables)
-                    {
-                        string fieldName = vds.Identifier.Text.Trim();
-                        string typeName = model.GetFullTypeName(varDecl.Type, out bool isArray);
-                        int arrayElementCount = 0;
-                        if (isArray)
-                        {
-                            arrayElementCount = GetArrayCountValue(vds, model);
-                        }
-
-                        TypeInfo typeInfo = model.GetTypeInfo(varDecl.Type);
-
-                        AlignmentInfo fieldSizeAndAlignment;
-
-                        if (typeInfo.Type.Kind == SymbolKind.ArrayType)
-                        {
-                            ITypeSymbol elementType = ((IArrayTypeSymbol)typeInfo.Type).ElementType;
-                            AlignmentInfo elementSizeAndAlignment = TypeSizeCache.Get(elementType);
-                            fieldSizeAndAlignment = new AlignmentInfo(
-                                elementSizeAndAlignment.CSharpSize * arrayElementCount,
-                                elementSizeAndAlignment.ShaderSize * arrayElementCount,
-                                elementSizeAndAlignment.CSharpAlignment,
-                                elementSizeAndAlignment.ShaderAlignment);
-                        }
-                        else
-                        {
-                            fieldSizeAndAlignment = TypeSizeCache.Get(typeInfo.Type);
-                        }
-
-                        structCSharpSize += structCSharpSize % fieldSizeAndAlignment.CSharpAlignment;
-                        structCSharpSize += fieldSizeAndAlignment.CSharpSize;
-                        structCSharpAlignment = Math.Max(structCSharpAlignment, fieldSizeAndAlignment.CSharpAlignment);
-
-                        structShaderSize += structShaderSize % fieldSizeAndAlignment.ShaderAlignment;
-                        structShaderSize += fieldSizeAndAlignment.ShaderSize;
-                        structShaderAlignment = Math.Max(structShaderAlignment, fieldSizeAndAlignment.ShaderAlignment);
-
-                        TypeReference tr = new TypeReference(typeName, model.GetTypeInfo(varDecl.Type).Type);
-                        SemanticType semanticType = GetSemanticType(vds);
-                        fields.Add(new FieldDefinition(fieldName, tr, semanticType, arrayElementCount, fieldSizeAndAlignment));
-                    }
+                    arrayElementCount = GetArrayCountValue(declaration, model);
                 }
+
+                TypeInfo typeInfo = model.GetTypeInfo(type);
+
+                AlignmentInfo fieldSizeAndAlignment;
+
+                if (typeInfo.Type.Kind == SymbolKind.ArrayType)
+                {
+                    ITypeSymbol elementType = ((IArrayTypeSymbol)typeInfo.Type).ElementType;
+                    AlignmentInfo elementSizeAndAlignment = TypeSizeCache.Get(elementType);
+                    fieldSizeAndAlignment = new AlignmentInfo(
+                        elementSizeAndAlignment.CSharpSize * arrayElementCount,
+                        elementSizeAndAlignment.ShaderSize * arrayElementCount,
+                        elementSizeAndAlignment.CSharpAlignment,
+                        elementSizeAndAlignment.ShaderAlignment);
+                }
+                else
+                {
+                    fieldSizeAndAlignment = TypeSizeCache.Get(typeInfo.Type);
+                }
+
+                structCSharpSize += structCSharpSize % fieldSizeAndAlignment.CSharpAlignment;
+                structCSharpSize += fieldSizeAndAlignment.CSharpSize;
+                structCSharpAlignment = Math.Max(structCSharpAlignment, fieldSizeAndAlignment.CSharpAlignment);
+
+                structShaderSize += structShaderSize % fieldSizeAndAlignment.ShaderAlignment;
+                structShaderSize += fieldSizeAndAlignment.ShaderSize;
+                structShaderAlignment = Math.Max(structShaderAlignment, fieldSizeAndAlignment.ShaderAlignment);
+
+                TypeReference tr = new TypeReference(typeName, model.GetTypeInfo(type).Type);
+                SemanticType semanticType = GetSemanticType(declaration);
+                fields.Add(new FieldDefinition(fieldName, tr, semanticType, arrayElementCount, fieldSizeAndAlignment));
             }
 
             sd = new StructureDefinition(
-                structName.Trim(),
+                GetFullTypeName(node),
                 fields.ToArray(),
                 new AlignmentInfo(structCSharpSize, structShaderSize, structCSharpAlignment, structShaderAlignment));
             return true;
         }
 
-        private static int GetArrayCountValue(VariableDeclaratorSyntax vds, SemanticModel semanticModel)
+        private static int GetArrayCountValue(CSharpSyntaxNode vds, SemanticModel semanticModel)
         {
             AttributeSyntax[] arraySizeAttrs = Utilities.GetMemberAttributes(vds, "ArraySize");
             if (arraySizeAttrs.Length != 1)
@@ -151,9 +167,9 @@ namespace ShaderGen
             return (int)constantValue.Value;
         }
 
-        private static SemanticType GetSemanticType(VariableDeclaratorSyntax vds)
+        private static SemanticType GetSemanticType(CSharpSyntaxNode cssn)
         {
-            AttributeSyntax[] attrs = Utilities.GetMemberAttributes(vds, "VertexSemantic");
+            AttributeSyntax[] attrs = Utilities.GetMemberAttributes(cssn, "VertexSemantic");
             if (attrs.Length == 1)
             {
                 AttributeSyntax semanticTypeAttr = attrs[0];
@@ -173,34 +189,34 @@ namespace ShaderGen
             }
             else if (attrs.Length > 1)
             {
-                throw new ShaderGenerationException("Too many vertex semantics applied to field: " + vds.ToFullString());
+                throw new ShaderGenerationException("Too many vertex semantics applied to field: " + cssn.ToFullString());
             }
 
-            if (CheckSingleAttribute(vds, "SystemPositionSemantic"))
+            if (CheckSingleAttribute(cssn, "SystemPositionSemantic"))
             {
                 return SemanticType.SystemPosition;
             }
-            else if (CheckSingleAttribute(vds, "PositionSemantic"))
+            else if (CheckSingleAttribute(cssn, "PositionSemantic"))
             {
                 return SemanticType.Position;
             }
-            else if (CheckSingleAttribute(vds, "NormalSemantic"))
+            else if (CheckSingleAttribute(cssn, "NormalSemantic"))
             {
                 return SemanticType.Normal;
             }
-            else if (CheckSingleAttribute(vds, "TextureCoordinateSemantic"))
+            else if (CheckSingleAttribute(cssn, "TextureCoordinateSemantic"))
             {
                 return SemanticType.TextureCoordinate;
             }
-            else if (CheckSingleAttribute(vds, "ColorSemantic"))
+            else if (CheckSingleAttribute(cssn, "ColorSemantic"))
             {
                 return SemanticType.Color;
             }
-            else if (CheckSingleAttribute(vds, "TangentSemantic"))
+            else if (CheckSingleAttribute(cssn, "TangentSemantic"))
             {
                 return SemanticType.Tangent;
             }
-            else if (CheckSingleAttribute(vds, "ColorTargetSemantic"))
+            else if (CheckSingleAttribute(cssn, "ColorTargetSemantic"))
             {
                 return SemanticType.ColorTarget;
             }
@@ -208,9 +224,9 @@ namespace ShaderGen
             return SemanticType.None;
         }
 
-        private static bool CheckSingleAttribute(VariableDeclaratorSyntax vds, string name)
+        private static bool CheckSingleAttribute(CSharpSyntaxNode cssn, string name)
         {
-            AttributeSyntax[] attrs = Utilities.GetMemberAttributes(vds, name);
+            AttributeSyntax[] attrs = Utilities.GetMemberAttributes(cssn, name);
             return attrs.Length == 1;
         }
 

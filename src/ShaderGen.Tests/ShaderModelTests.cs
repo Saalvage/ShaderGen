@@ -1,6 +1,5 @@
 ﻿using Microsoft.CodeAnalysis;
 using System.Collections.Generic;
-using System.Linq;
 using ShaderGen.Hlsl;
 using ShaderGen.Tests.Tools;
 using TestShaders;
@@ -136,6 +135,27 @@ namespace ShaderGen.Tests
             Assert.Equal(5, shaderModel.AllResources[11].Binding);
             Assert.Equal(1, shaderModel.AllResources[12].Set);
             Assert.Equal(1, shaderModel.AllResources[12].Binding);
+        }
+
+        [Fact]
+        public void RecordStructs_CorrectlyParsed()
+        {
+            Compilation compilation = TestUtil.GetCompilation();
+            HlslBackend backend = new HlslBackend(compilation);
+            ShaderGenerator sg = new ShaderGenerator(compilation, backend, "TestShaders.RecordStructs.VS");
+
+            ShaderGenerationResult genResult = sg.GenerateShaders();
+            IReadOnlyList<GeneratedShaderSet> sets = genResult.GetOutput(backend);
+            Assert.Equal(1, sets.Count);
+            GeneratedShaderSet set = sets[0];
+            ShaderModel shaderModel = set.Model;
+
+            Assert.Single(shaderModel.VertexResources);
+            Assert.Equal(SemanticType.Position, shaderModel.Structures[1].Fields[0].SemanticType);
+            Assert.Equal(SemanticType.TextureCoordinate, shaderModel.Structures[1].Fields[1].SemanticType);
+
+            Assert.Equal(SemanticType.SystemPosition, shaderModel.Structures[2].Fields[0].SemanticType);
+            Assert.Equal(SemanticType.TextureCoordinate, shaderModel.Structures[2].Fields[1].SemanticType);
         }
 
         [Fact]

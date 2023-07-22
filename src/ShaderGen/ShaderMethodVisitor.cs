@@ -483,7 +483,8 @@ namespace ShaderGen
                 // TODO: Share code to format constant values.
                 return string.Format(CultureInfo.InvariantCulture, "{0}", fs.ConstantValue);
             }
-            else if (symbol.Kind == SymbolKind.Field && containingTypeName == _containingTypeName)
+            else if (symbol.Kind == SymbolKind.Field && containingTypeName == _containingTypeName
+                     || symbol is IPropertySymbol ps && (ps.GetMethod?.IsImplicitlyDeclared ?? false))
             {
                 string symbolName = symbol.Name;
                 ResourceDefinition referencedResource = _backend.GetContext(_setName).Resources.SingleOrDefault(rd => rd.Name == symbolName);

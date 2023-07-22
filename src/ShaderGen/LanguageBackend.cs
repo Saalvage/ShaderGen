@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace ShaderGen
 {
@@ -369,7 +370,8 @@ namespace ShaderGen
                 // throw new ShaderGenerationException("Unable to obtain compilation type metadata for " + name);
             }
             SyntaxNode declaringSyntax = type.OriginalDefinition.DeclaringSyntaxReferences[0].GetSyntax();
-            if (declaringSyntax is StructDeclarationSyntax sds)
+            if (declaringSyntax is TypeDeclarationSyntax sds
+                && (sds is StructDeclarationSyntax || sds.IsKind(SyntaxKind.RecordStructDeclaration)))
             {
                 if (ShaderSyntaxWalker.TryGetStructDefinition(Compilation.GetSemanticModel(sds.SyntaxTree), sds, out sd))
                 {
