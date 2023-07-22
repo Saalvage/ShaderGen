@@ -657,7 +657,9 @@ namespace ShaderGen
             string identifier = _backend.CorrectIdentifier(varDeclarator.Identifier.ToString());
             sb.Append(identifier);
 
-            if (varDeclarator.Initializer != null)
+            bool isDefaultAssignment = varDeclarator.Initializer?.Value is LiteralExpressionSyntax les
+                                       && les.Token.IsKind(SyntaxKind.DefaultKeyword);
+            if (varDeclarator.Initializer != null && !isDefaultAssignment)
             {
                 sb.Append(' ');
                 sb.Append(varDeclarator.Initializer.EqualsToken.ToString());
