@@ -52,7 +52,7 @@ namespace ShaderGen
                     if (attr.ArgumentList?.Arguments.Any() ?? false)
                     {
                         cs = GetStringParam(attr, 0);
-                        AddComputeShaderInfo(shaderName, cs);
+                        AddComputeShaderInfo(shaderName, PrependClassName(cs));
                         continue;
                     }
 
@@ -68,8 +68,7 @@ namespace ShaderGen
                         cs = funcName;
                     }
 
-                    AddComputeShaderInfo(shaderName, cs);
-
+                    AddComputeShaderInfo(shaderName, PrependClassName(cs));
                     continue;
                 }
 
@@ -82,7 +81,7 @@ namespace ShaderGen
                     vs = GetStringParam(attr, 0);
                     fs = GetStringParam(attr, 1);
 
-                    AddShaderSetInfo(shaderName, fullClassName + '.' + vs, fullClassName + '.' + fs);
+                    AddShaderSetInfo(shaderName, PrependClassName(vs), PrependClassName(fs));
                     continue;
                 }
 
@@ -104,8 +103,11 @@ namespace ShaderGen
                     }
                 }
 
-                AddShaderSetInfo(shaderName, fullClassName + '.' + vs, fullClassName + '.' + fs);
+                AddShaderSetInfo(shaderName, PrependClassName(vs), PrependClassName(fs));
             }
+
+            string PrependClassName(string functionName)
+                => functionName == null ? null : fullClassName + '.' + functionName;
         }
 
         public override void VisitAttribute(AttributeSyntax node)
@@ -187,14 +189,15 @@ namespace ShaderGen
 
         private static string GetStringParam(AttributeSyntax node, int index)
         {
-            string text = node.ArgumentList?.Arguments[index].ToString();
-            if (text == "null")
+            var args = node.ArgumentList?.Arguments;
+            var text = args?.Count > index ? args.Value[index].ToString() : null;
+            if (text == null || text == "null")
             {
                 return null;
             }
             else
             {
-                return text;
+                return text[1..^1];
             }
         }
 
