@@ -147,7 +147,7 @@ namespace ShaderGen
                     throw new ShaderGenerationException($"A constructor reference could not be identified: {node}");
                 }
 
-                string containingType = symbol.ContainingType.ToDisplayString();
+                string containingType = symbol.ContainingType.GetFullMetadataName();
                 _children.Add(new TypeAndMethodName() { TypeName = containingType, MethodName = ".ctor" });
 
                 base.VisitObjectCreationExpression(node);

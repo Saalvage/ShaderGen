@@ -15,6 +15,7 @@ namespace TestShaders
         public FragmentInput VS(VertexInput input)
         {
             FragmentInput output = default;
+            output.Position = default;
             output.Position = ShaderBuiltins.Mul(Constants.Transform, new Vector4(input.Position, 1f));
             output.TextureCoords = input.TextureCoords;
             return output;

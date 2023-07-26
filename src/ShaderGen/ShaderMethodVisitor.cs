@@ -568,6 +568,12 @@ namespace ShaderGen
 
         public override string VisitLiteralExpression(LiteralExpressionSyntax node)
         {
+            if (node.Token.IsKind(SyntaxKind.DefaultKeyword))
+            {
+                var fullName = GetModel(node).GetFullTypeName(node);
+                return _backend.FormatInvocation(_setName, fullName, ".ctor", Array.Empty<InvocationParameterInfo>());
+            }
+
             string literal = node.ToFullString().Trim();
             return _backend.CorrectLiteral(literal);
         }
