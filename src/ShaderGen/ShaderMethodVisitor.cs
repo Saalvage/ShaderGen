@@ -64,6 +64,12 @@ namespace ShaderGen
             return new MethodProcessResult(sb.ToString(), _resourcesUsed);
         }
 
+        public override string DefaultVisit(SyntaxNode node)
+        {
+            throw new NotImplementedException($"Unfortunately, using \"{node}\" is currently not supported " +
+                                              $"because translating {node.GetType().Name} is not implemented.");
+        }
+
         public override string VisitBlock(BlockSyntax node)
         {
             StringBuilder sb = new StringBuilder();
@@ -443,11 +449,15 @@ namespace ShaderGen
         }
 
         public override string VisitObjectCreationExpression(ObjectCreationExpressionSyntax node)
-        {
-            SymbolInfo symbolInfo = GetModel(node).GetSymbolInfo(node.Type);
-            string fullName = Utilities.GetFullName(symbolInfo);
+            => VisitBaseObjectCreationExpression(node);
 
-            InvocationParameterInfo[] parameters = GetParameterInfos(node.ArgumentList);
+        public override string VisitImplicitObjectCreationExpression(ImplicitObjectCreationExpressionSyntax node)
+            => VisitBaseObjectCreationExpression(node);
+
+        private string VisitBaseObjectCreationExpression(BaseObjectCreationExpressionSyntax node)
+        {
+            var fullName = GetModel(node).GetFullTypeName(node);
+            var parameters = GetParameterInfos(node.ArgumentList);
             return _backend.FormatInvocation(_setName, fullName, ".ctor", parameters);
         }
 
