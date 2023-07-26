@@ -23,6 +23,10 @@ Writing shader code in C# could have quite a few benefits:
 Here is an example vertex and fragment shader, written in C# with ShaderGen:
 
 ```C#
+using ShaderGen;
+using static ShaderGen.ShaderBuiltins; // Important for Mul, Sample, etc.
+
+[ShaderClass]
 public class MinExample
 {
     public Matrix4x4 Projection;
