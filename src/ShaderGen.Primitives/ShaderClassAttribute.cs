@@ -2,10 +2,14 @@
 
 namespace ShaderGen
 {
-    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct)]
+    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = true)]
     public class ShaderClassAttribute : Attribute
     {
-        public ShaderClassAttribute(string vs = null, string fs = null, string name = null)
+        public ShaderClassAttribute()
+        {
+        }
+
+        public ShaderClassAttribute(string vs, string fs, string name = null)
         {
         }
     }

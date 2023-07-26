@@ -28,12 +28,15 @@ namespace ShaderGen.Tests
         private static readonly string ProjectBasePath = Path.Combine(AppContext.BaseDirectory, "TestAssets");
 
         public static Compilation GetCompilation()
-            => GetCompilation(GetSyntaxTrees());
+            => GetCompilation(GetSyntaxTrees("*.cs"));
         public static Compilation GetCompilation(string code)
             => GetCompilation(CSharpSyntaxTree.ParseText(code));
 
         public static Compilation GetCompilation(params SyntaxTree[] syntaxTrees)
             => GetCompilation((IEnumerable<SyntaxTree>)syntaxTrees);
+
+        public static Compilation GetCompilationFromFiles(string searchPattern)
+            => GetCompilation(GetSyntaxTrees(searchPattern));
 
         public static Compilation GetCompilation(IEnumerable<SyntaxTree> syntaxTrees)
         {
@@ -59,9 +62,9 @@ namespace ShaderGen.Tests
             throw new InvalidOperationException("Couldn't find a syntax tree with name " + name);
         }
 
-        private static IEnumerable<SyntaxTree> GetSyntaxTrees()
+        private static IEnumerable<SyntaxTree> GetSyntaxTrees(string searchPattern)
         {
-            foreach (string sourceItem in Directory.EnumerateFiles(ProjectBasePath, "*.cs", SearchOption.AllDirectories).ToArray())
+            foreach (string sourceItem in Directory.EnumerateFiles(ProjectBasePath, searchPattern, SearchOption.AllDirectories))
             {
                 using (FileStream fs = File.OpenRead(sourceItem))
                 {

@@ -1,4 +1,5 @@
-﻿using Microsoft.CodeAnalysis;
+﻿using System;
+using Microsoft.CodeAnalysis;
 using System.Collections.Generic;
 using System.Linq;
 using ShaderGen.Hlsl;
@@ -9,29 +10,58 @@ namespace ShaderGen.Tests
 {
     public static class ShaderSetDiscovererTests
     {
-        [SkippableFact(typeof(RequiredToolFeatureMissingException))]
+        private static void AssertShaderSetInfoEqual(ShaderSetInfo info, string name, string vs = null, string fs = null, string cs = null)
+        {
+            Assert.Equal(name, info.Name);
+            Assert.Equal(vs, info.VertexShader?.ToString());
+            Assert.Equal(fs, info.FragmentShader?.ToString());
+            Assert.Equal(cs, info.ComputeShader?.ToString());
+        }
+
+        [Fact]
         public static void ShaderSetAutoDiscovery()
         {
-            ToolChain toolChain = ToolChain.Get(ToolFeatures.ToCompiled);
-            if (toolChain == null)
+            var compilation = TestUtil.GetCompilationFromFiles("ShaderSets.cs");
+            var ssd = new ShaderSetDiscoverer();
+
+            foreach (var tree in compilation.SyntaxTrees)
             {
-                throw new RequiredToolFeatureMissingException("No tool chain supporting compilation was found!");
+                ssd.Visit(tree.GetRoot());
             }
 
-            Compilation compilation = TestUtil.GetCompilation();
-            LanguageBackend backend = toolChain.CreateBackend(compilation);
-            ShaderGenerator sg = new ShaderGenerator(compilation, backend);
-            ShaderGenerationResult generationResult = sg.GenerateShaders();
-            IReadOnlyList<GeneratedShaderSet> hlslSets = generationResult.GetOutput(backend);
-            Assert.Equal(4, hlslSets.Count);
-            GeneratedShaderSet set = hlslSets[0];
-            Assert.Equal("VertexAndFragment", set.Name);
+            var shaderSets = ssd.GetShaderSets();
+            Assert.Equal(15, shaderSets.Count);
+            AssertShaderSetInfoEqual(shaderSets[0], "VertexAndFragment", "TestShaders.Basic.VS", "TestShaders.Basic.FS");
+            AssertShaderSetInfoEqual(shaderSets[1], "VertexOnly", "TestShaders.Basic.VS", null);
+            AssertShaderSetInfoEqual(shaderSets[2], "FragmentOnly", null, "TestShaders.Basic.FS");
+            AssertShaderSetInfoEqual(shaderSets[3], "SimpleCompute", null, null, "TestShaders.Compute.CS");
+            AssertShaderSetInfoEqual(shaderSets[4], "OnlyVS", "TestShaders.OnlyVS.VertexShader", null);
+            AssertShaderSetInfoEqual(shaderSets[5], "OnlyFS", null, "TestShaders.OnlyFS.FragmentShader");
+            AssertShaderSetInfoEqual(shaderSets[6], "Basic", "TestShaders.Basic.VS", "TestShaders.Basic.FS");
+            AssertShaderSetInfoEqual(shaderSets[7], "Multiple", "TestShaders.Multiple.VS1", "TestShaders.Multiple.FS1");
+            AssertShaderSetInfoEqual(shaderSets[8], "Multiple2", "TestShaders.Multiple.VS2", "TestShaders.Multiple.FS2");
+            AssertShaderSetInfoEqual(shaderSets[9], "Multiple3", "TestShaders.Multiple.VS1", "TestShaders.Multiple.FS2");
+            AssertShaderSetInfoEqual(shaderSets[10], "ExplicitNull", null, "TestShaders.ExplicitNull.FS");
+            AssertShaderSetInfoEqual(shaderSets[11], "ComputeInferred", null, null, "TestShaders.ComputeInferred.ComputeShader");
+            AssertShaderSetInfoEqual(shaderSets[12], "Compute", null, null, "TestShaders.Compute.CS1");
+            AssertShaderSetInfoEqual(shaderSets[13], "Compute2", null, null, "TestShaders.Compute.CS2");
+            AssertShaderSetInfoEqual(shaderSets[14], "Compute3", null, null, "TestShaders.Compute.CS1");
+        }
 
-            CompileResult result = toolChain.Compile(set.VertexShaderCode, Stage.Vertex, "VS");
-            Assert.False(result.HasError, result.ToString());
+        [Fact]
+        public static void ShaderSetAutoDiscoveryExceptions()
+        {
+            var compilation = TestUtil.GetCompilationFromFiles("ErroneousAutoDiscoverShaderSets/*.cs");
 
-            result = toolChain.Compile(set.FragmentShaderCode, Stage.Fragment, "FS");
-            Assert.False(result.HasError, result.ToString());
+            // Sanity check, if we don't have any it's not finding the folder.
+            Assert.True(compilation.SyntaxTrees.Any());
+
+            foreach (var tree in compilation.SyntaxTrees)
+            {
+                var ssd = new ShaderSetDiscoverer();
+                Assert.Throws<ShaderGenerationException>(() => ssd.Visit(tree.GetRoot()));
+            }
+
         }
     }
 }
