@@ -11,6 +11,20 @@ namespace ShaderGen
         private readonly HashSet<string> _discoveredNames = new HashSet<string>();
         private readonly List<ShaderSetInfo> _shaderSets = new List<ShaderSetInfo>();
 
+        private readonly Compilation _compilation;
+        private SemanticModel _currentSemanticModel;
+
+        public ShaderSetDiscoverer(Compilation compilation)
+        {
+            _compilation = compilation;
+        }
+
+        public override void VisitCompilationUnit(CompilationUnitSyntax node)
+        {
+            _currentSemanticModel = _compilation.GetSemanticModel(node.SyntaxTree);
+            base.VisitCompilationUnit(node);
+        }
+
         public override void VisitClassDeclaration(ClassDeclarationSyntax node)
         {
             VisitTypeDeclaration(node);
@@ -119,17 +133,38 @@ namespace ShaderGen
             if (!attrName.Contains("ShaderSet"))
                 return;
 
-            string name;
-
             if (attrName.Contains("ComputeShaderSet"))
             {
-                name = GetStringParam(node, 0);
-                var cs = GetStringParam(node, 1);
-                AddComputeShaderInfo(name, cs);
+                var (csName, csFunc) = ParseComputeArgs();
+                AddComputeShaderInfo(csName, csFunc);
+                return;
+
+                (string, string) ParseComputeArgs() {
+                    // Type, string
+                    if (TryGetTypeParam(node, 0, out var type0))
+                        return (type0.Name, $"{type0.FullName}.{GetStringParam(node, 1)}");
+
+                    // string, Type, string
+                    if (TryGetTypeParam(node, 1, out var type1))
+                        return (GetStringParam(node, 0), $"{type1.FullName}.{GetStringParam(node, 2)}");
+
+                    // string, string
+                    return (GetStringParam(node, 0), GetStringParam(node, 1));
+                }
+            }
+
+            var name = GetStringParam(node, 0);
+
+            var is1Type = TryGetTypeParam(node, 1, out var type1);
+            var is3Type = TryGetTypeParam(node, 3, out var type3);
+            if (is1Type || is3Type)
+            {
+                AddShaderSetInfo(name,
+                    !is1Type ? null : $"{type1.FullName}.{GetStringParam(node, 2)}",
+                    !is3Type ? null : $"{type3.FullName}.{GetStringParam(node, 4)}");
                 return;
             }
 
-            name = GetStringParam(node, 0);
             var vs = GetStringParam(node, 1);
             var fs = GetStringParam(node, 2);
             AddShaderSetInfo(name, vs, fs);
@@ -187,18 +222,32 @@ namespace ShaderGen
                     x.AttributeLists .SelectMany(x => x.Attributes, (_, y) => y.Name.ToString()),
                     (x, y) => (x.Identifier.Text, y));
 
-        private static string GetStringParam(AttributeSyntax node, int index)
+        private bool TryGetTypeParam(AttributeSyntax node, int index, out (string Name, string FullName) typeInfo)
+        {
+            typeInfo = (null, null);
+
+            var args = node.ArgumentList?.Arguments;
+            if (args is null || index >= args?.Count)
+                return false;
+
+            if (args.Value[index].Expression is TypeOfExpressionSyntax toes)
+            { 
+                var symbol = (INamedTypeSymbol)_currentSemanticModel.GetSymbolInfo(toes.Type).Symbol;
+                typeInfo = (symbol.Name, Utilities.GetFullName(symbol));
+                return true;
+            }
+
+            return false;
+        }
+
+        private string GetStringParam(AttributeSyntax node, int index)
         {
             var args = node.ArgumentList?.Arguments;
-            var text = args?.Count > index ? args.Value[index].ToString() : null;
-            if (text == null || text == "null")
-            {
+            if (args is null || index >= args?.Count)
                 return null;
-            }
-            else
-            {
-                return text[1..^1];
-            }
+
+            var val = _currentSemanticModel.GetConstantValue(args.Value[index].Expression);
+            return val.HasValue ? (string)val.Value : null;
         }
 
         public IReadOnlyList<ShaderSetInfo> GetShaderSets() => _shaderSets;

@@ -8,5 +8,13 @@ namespace ShaderGen
         public ComputeShaderSetAttribute(string setName, string computeShaderFunctionName)
         {
         }
+
+        public ComputeShaderSetAttribute(string name, Type type, string methodName)
+        {
+        }
+
+        public ComputeShaderSetAttribute(Type type, string methodName) 
+        {
+        }
     }
 }

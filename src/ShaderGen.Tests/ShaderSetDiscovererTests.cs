@@ -1,28 +1,16 @@
-﻿using System;
-using Microsoft.CodeAnalysis;
-using System.Collections.Generic;
-using System.Linq;
-using ShaderGen.Hlsl;
-using ShaderGen.Tests.Tools;
+﻿using System.Linq;
 using Xunit;
+using static TestShaders.VeldridShaders.UIntVertexAttribs;
 
 namespace ShaderGen.Tests
 {
     public static class ShaderSetDiscovererTests
     {
-        private static void AssertShaderSetInfoEqual(ShaderSetInfo info, string name, string vs = null, string fs = null, string cs = null)
-        {
-            Assert.Equal(name, info.Name);
-            Assert.Equal(vs, info.VertexShader?.ToString());
-            Assert.Equal(fs, info.FragmentShader?.ToString());
-            Assert.Equal(cs, info.ComputeShader?.ToString());
-        }
-
         [Fact]
         public static void ShaderSetAutoDiscovery()
         {
             var compilation = TestUtil.GetCompilationFromFiles("ShaderSets.cs");
-            var ssd = new ShaderSetDiscoverer();
+            var ssd = new ShaderSetDiscoverer(compilation);
 
             foreach (var tree in compilation.SyntaxTrees)
             {
@@ -30,22 +18,40 @@ namespace ShaderGen.Tests
             }
 
             var shaderSets = ssd.GetShaderSets();
-            Assert.Equal(15, shaderSets.Count);
-            AssertShaderSetInfoEqual(shaderSets[0], "VertexAndFragment", "TestShaders.Basic.VS", "TestShaders.Basic.FS");
-            AssertShaderSetInfoEqual(shaderSets[1], "VertexOnly", "TestShaders.Basic.VS", null);
-            AssertShaderSetInfoEqual(shaderSets[2], "FragmentOnly", null, "TestShaders.Basic.FS");
-            AssertShaderSetInfoEqual(shaderSets[3], "SimpleCompute", null, null, "TestShaders.Compute.CS");
-            AssertShaderSetInfoEqual(shaderSets[4], "OnlyVS", "TestShaders.OnlyVS.VertexShader", null);
-            AssertShaderSetInfoEqual(shaderSets[5], "OnlyFS", null, "TestShaders.OnlyFS.FragmentShader");
-            AssertShaderSetInfoEqual(shaderSets[6], "Basic", "TestShaders.Basic.VS", "TestShaders.Basic.FS");
-            AssertShaderSetInfoEqual(shaderSets[7], "Multiple", "TestShaders.Multiple.VS1", "TestShaders.Multiple.FS1");
-            AssertShaderSetInfoEqual(shaderSets[8], "Multiple2", "TestShaders.Multiple.VS2", "TestShaders.Multiple.FS2");
-            AssertShaderSetInfoEqual(shaderSets[9], "Multiple3", "TestShaders.Multiple.VS1", "TestShaders.Multiple.FS2");
-            AssertShaderSetInfoEqual(shaderSets[10], "ExplicitNull", null, "TestShaders.ExplicitNull.FS");
-            AssertShaderSetInfoEqual(shaderSets[11], "ComputeInferred", null, null, "TestShaders.ComputeInferred.ComputeShader");
-            AssertShaderSetInfoEqual(shaderSets[12], "Compute", null, null, "TestShaders.Compute.CS1");
-            AssertShaderSetInfoEqual(shaderSets[13], "Compute2", null, null, "TestShaders.Compute.CS2");
-            AssertShaderSetInfoEqual(shaderSets[14], "Compute3", null, null, "TestShaders.Compute.CS1");
+
+            (string, string, string, string)[] shaderSetValues =
+            {
+                ("VertexAndFragment", "TestShaders.Basic.VS", "TestShaders.Basic.FS", null),
+                ("VertexAndFragment2", "TestShaders.Basic.VS", "TestShaders.Basic.FS", null),
+                ("VertexOnly", "TestShaders.Basic.VS", null, null),
+                ("VertexOnly2", "TestShaders.Basic.VS", null, null),
+                ("FragmentOnly", null, "TestShaders.Basic.FS", null),
+                ("FragmentOnly2", null, "TestShaders.Basic.FS", null),
+                ("SimpleCompute", null, null, "TestShaders.Compute.CS1"),
+                ("SimpleCompute2", null, null, "TestShaders.Compute.CS1"),
+                ("ComputeClone", null, null, "TestShaders.ComputeClone.CS2"),
+                ("OnlyVS", "TestShaders.OnlyVS.VertexShader", null, null),
+                ("OnlyFS", null, "TestShaders.OnlyFS.FragmentShader", null),
+                ("Basic", "TestShaders.Basic.VS", "TestShaders.Basic.FS", null),
+                ("Multiple", "TestShaders.Multiple.VS1", "TestShaders.Multiple.FS1", null),
+                ("Multiple2", "TestShaders.Multiple.VS2", "TestShaders.Multiple.FS2", null),
+                ("Multiple3", "TestShaders.Multiple.VS1", "TestShaders.Multiple.FS2", null),
+                ("ExplicitNull", null, "TestShaders.ExplicitNull.FS", null),
+                ("ComputeInferred", null, null, "TestShaders.ComputeInferred.ComputeShader"),
+                ("Compute", null, null, "TestShaders.Compute.CS1"),
+                ("Compute2", null, null, "TestShaders.Compute.CS2"),
+                ("Compute3", null, null, "TestShaders.Compute.CS1"),
+            };
+
+            Assert.Equal(shaderSetValues.Length, shaderSets.Count);
+            foreach (var (info, shaderSetValue) in shaderSets.Zip(shaderSetValues))
+            {
+                var (name, vs, fs, cs) = shaderSetValue;
+                Assert.Equal(name, info.Name);
+                Assert.Equal(vs, info.VertexShader?.ToString());
+                Assert.Equal(fs, info.FragmentShader?.ToString());
+                Assert.Equal(cs, info.ComputeShader?.ToString());
+            }
         }
 
         [Fact]
@@ -58,7 +64,7 @@ namespace ShaderGen.Tests
 
             foreach (var tree in compilation.SyntaxTrees)
             {
-                var ssd = new ShaderSetDiscoverer();
+                var ssd = new ShaderSetDiscoverer(compilation);
                 Assert.Throws<ShaderGenerationException>(() => ssd.Visit(tree.GetRoot()));
             }
 

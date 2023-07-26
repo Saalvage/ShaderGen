@@ -61,7 +61,7 @@ namespace ShaderGen
                 string.IsNullOrWhiteSpace(fragmentFunctionName) &&
                 string.IsNullOrWhiteSpace(computeFunctionName))
             {
-                ShaderSetDiscoverer ssd = new ShaderSetDiscoverer();
+                ShaderSetDiscoverer ssd = new ShaderSetDiscoverer(_compilation);
                 foreach (SyntaxTree tree in _compilation.SyntaxTrees)
                 {
                     ssd.Visit(tree.GetRoot());

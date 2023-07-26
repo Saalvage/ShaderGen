@@ -1,18 +1,26 @@
 ﻿using ShaderGen;
-using System.Numerics;
 using System.Runtime.CompilerServices;
-using Xunit;
+using TestShaders;
 
 // Multi-line declaration
 [assembly: ShaderSet(
     "VertexAndFragment",
     "TestShaders.Basic.VS",
     "TestShaders.Basic.FS")]
+[assembly: ShaderSet(
+    "VertexAndFragment2",
+    typeof(Basic), nameof(Basic.VS),
+    typeof(Basic), nameof(Basic.FS))]
 
 [assembly: ShaderSet("VertexOnly", "TestShaders.Basic.VS", null)]
-[assembly: ShaderSet("FragmentOnly", null, "TestShaders.Basic.FS")]
+[assembly: ShaderSet("VertexOnly2", typeof(Basic), nameof(Basic.VS), null, null)]
 
-[assembly: ComputeShaderSet("SimpleCompute", "TestShaders.Compute.CS")]
+[assembly: ShaderSet("FragmentOnly", null, "TestShaders.Basic.FS")]
+[assembly: ShaderSet("FragmentOnly2", null, null, typeof(Basic), nameof(Basic.FS))]
+
+[assembly: ComputeShaderSet("SimpleCompute", "TestShaders.Compute.CS1")]
+[assembly: ComputeShaderSet("SimpleCompute2", typeof(Compute), nameof(Compute.CS1))]
+[assembly: ComputeShaderSet(typeof(ComputeClone), nameof(ComputeClone.CS2))]
 
 namespace TestShaders;
 
@@ -39,7 +47,7 @@ public class Basic
     [FragmentShader] public void FS() { }
 }
 
-[ShaderClass("VS1", "FS1")]
+[ShaderClass(nameof(VS1), nameof(FS1))]
 [ShaderClass("VS2", "FS2", "Multiple2"),
     ShaderClass("VS1", "FS2", "Multiple3")]
 public class Multiple
@@ -71,6 +79,11 @@ public class ComputeInferred
     ComputeShaderClass("CS1", "Compute3")]
 public class Compute
 {
+    [ComputeShader(1, 1, 1)] public void CS1() { }
+    [ComputeShader(1, 1, 1)] public void CS2() { }
+}
+
+public class ComputeClone {
     [ComputeShader(1, 1, 1)] public void CS1() { }
     [ComputeShader(1, 1, 1)] public void CS2() { }
 }
