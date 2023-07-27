@@ -230,6 +230,11 @@ namespace ShaderGen
             return fullName;
         }
 
+        public static bool IsAutoProperty(IPropertySymbol propertySymbol)
+            => propertySymbol.ContainingType.GetMembers()
+                .OfType<IFieldSymbol>()
+                .Any(x => SymbolEqualityComparer.Default.Equals(x.AssociatedSymbol, propertySymbol));
+
         internal static string JoinIgnoreNull(string separator, IEnumerable<string> value)
         {
             return string.Join(separator, value.Where(s => !string.IsNullOrEmpty(s)));

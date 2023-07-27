@@ -494,7 +494,7 @@ namespace ShaderGen
                 return string.Format(CultureInfo.InvariantCulture, "{0}", fs.ConstantValue);
             }
             else if (symbol.Kind == SymbolKind.Field && containingTypeName == _containingTypeName
-                     || symbol is IPropertySymbol ps && (ps.GetMethod?.IsImplicitlyDeclared ?? false))
+                     || symbol is IPropertySymbol ps && Utilities.IsAutoProperty(ps))
             {
                 string symbolName = symbol.Name;
                 ResourceDefinition referencedResource = _backend.GetContext(_setName).Resources.SingleOrDefault(rd => rd.Name == symbolName);

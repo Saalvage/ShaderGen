@@ -74,7 +74,12 @@ namespace ShaderGen
                     .OfType<FieldDeclarationSyntax>()
                     .Where(x => !x.Modifiers.Any(x => x.IsKind(SyntaxKind.ConstKeyword)))
                     .SelectMany(x => x.Declaration.Variables,
-                        (x, y) => ((CSharpSyntaxNode)y, y.Identifier, x.Declaration.Type)),
+                        (x, y) => ((CSharpSyntaxNode)y, y.Identifier, x.Declaration.Type))
+                    .Concat(sds.Members // Auto-properties (no explicit getter/setter)
+                        .OfType<PropertyDeclarationSyntax>()
+                        .Where(x => x.AccessorList != null
+                                    && x.AccessorList.Accessors.All(x => x.Body == null && x.ExpressionBody == null))
+                        .Select(x => ((CSharpSyntaxNode)x, x.Identifier, x.Type))),
                 RecordDeclarationSyntax {ParameterList: { }} cds when cds.IsKind(SyntaxKind.RecordStructDeclaration)
                         => cds.ParameterList.Parameters
                     .Select(x => ((CSharpSyntaxNode)x, x.Identifier, x.Type)),
