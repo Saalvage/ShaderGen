@@ -70,26 +70,31 @@ namespace ShaderGen
 
             IEnumerable<(CSharpSyntaxNode, SyntaxToken, TypeSyntax)> cSharpFields = node switch
             {
-                StructDeclarationSyntax sds => sds.Members
-                    .OfType<FieldDeclarationSyntax>()
-                    .Where(x => !x.Modifiers.Any(x => x.IsKind(SyntaxKind.ConstKeyword)))
-                    .SelectMany(x => x.Declaration.Variables,
-                        (x, y) => ((CSharpSyntaxNode)y, y.Identifier, x.Declaration.Type))
-                    .Concat(sds.Members // Auto-properties (no explicit getter/setter)
-                        .OfType<PropertyDeclarationSyntax>()
-                        .Where(x => x.AccessorList != null
-                                    && x.AccessorList.Accessors.All(x => x.Body == null && x.ExpressionBody == null))
-                        .Select(x => ((CSharpSyntaxNode)x, x.Identifier, x.Type))),
+                StructDeclarationSyntax => Enumerable.Empty<(CSharpSyntaxNode, SyntaxToken, TypeSyntax)>(),
                 RecordDeclarationSyntax {ParameterList: { }} cds when cds.IsKind(SyntaxKind.RecordStructDeclaration)
                         => cds.ParameterList.Parameters
                     .Select(x => ((CSharpSyntaxNode)x, x.Identifier, x.Type)),
                 _ => null,
             };
+
             if (cSharpFields is null)
             {
                 sd = null;
                 return false;
             }
+
+            cSharpFields = cSharpFields.Concat(
+                node.Members
+                    .OfType<FieldDeclarationSyntax>()
+                    .Where(x => !x.Modifiers.Any(x => x.IsKind(SyntaxKind.ConstKeyword)))
+                    .SelectMany(x => x.Declaration.Variables,
+                        (x, y) => ((CSharpSyntaxNode) y, y.Identifier, x.Declaration.Type))
+                    .Concat(node.Members // Auto-properties (no explicit getter/setter)
+                        .OfType<PropertyDeclarationSyntax>()
+                        .Where(x => x.AccessorList != null
+                                    && x.AccessorList.Accessors.All(x => x.Body == null && x.ExpressionBody == null))
+                        .Select(x => ((CSharpSyntaxNode) x, x.Identifier, x.Type)))
+            );
 
             foreach (var (declaration, identifier, type) in cSharpFields)
             {
