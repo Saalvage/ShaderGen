@@ -154,7 +154,7 @@ namespace ShaderGen.Glsl
 
         protected override void EmitGlPositionCorrection(StringBuilder sb)
         {
-            sb.AppendLine($"        gl_Position.z = gl_Position.z * 2.0 - gl_Position.w;");
+            sb.AppendLine("    gl_Position.z = gl_Position.z * 2.0 - gl_Position.w;");
         }
     }
 }
