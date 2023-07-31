@@ -233,7 +233,7 @@ namespace ShaderGen.Glsl
 
             sb.AppendLine();
 
-            sb.AppendLine($"void main()");
+            sb.AppendLine("void main()");
             sb.AppendLine("{");
             if (inputType != null)
             {
@@ -269,6 +269,7 @@ namespace ShaderGen.Glsl
             string invocationStr = inputType != null
                 ? $"{entryFunction.Name}({CorrectIdentifier("input")})"
                 : $"{entryFunction.Name}()";
+            invocationStr = CorrectEntryPointName(invocationStr);
             if (mappedReturnType != "void")
             {
                 sb.AppendLine($"    {mappedReturnType} {CorrectIdentifier("output")} = {invocationStr};");
@@ -422,5 +423,7 @@ namespace ShaderGen.Glsl
         {
             return $"{type}({expression})";
         }
+
+        internal override string CorrectEntryPointName(string entryPoint) => "entrypoint_" + entryPoint;
     }
 }

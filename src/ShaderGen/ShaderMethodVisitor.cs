@@ -205,7 +205,7 @@ namespace ShaderGen
             string fullDeclType = _backend.CSharpToShaderType(_shaderFunction.DeclaringType);
             string shaderFunctionName = _shaderFunction.Name.Replace(".", "0_");
             string funcName = _shaderFunction.IsEntryPoint
-                ? shaderFunctionName
+                ? _backend.CorrectEntryPointName(shaderFunctionName)
                 : fullDeclType + "_" + shaderFunctionName;
             return $"{returnType} {funcName}({GetParameterDeclList()})";
         }

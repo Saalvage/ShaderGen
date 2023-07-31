@@ -302,7 +302,7 @@ namespace ShaderGen.App
             }
             else if (langType == typeof(Glsl450Backend) && IsGlslangValidatorAvailable())
             {
-                bool result = CompileSpirv(shaderPath, entryPoint, type, out string path);
+                bool result = CompileSpirv(shaderPath, entryPoint, "main", type, out string path);
                 paths = new[] { path };
                 return result;
             }
@@ -410,13 +410,13 @@ namespace ShaderGen.App
             return false;
         }
 
-        private static bool CompileSpirv(string shaderPath, string entryPoint, ShaderFunctionType type, out string path)
+        private static bool CompileSpirv(string shaderPath, string entryPoint, string sourceEntryPoint, ShaderFunctionType type, out string path)
         {
             string stage = type == ShaderFunctionType.VertexEntryPoint ? "vert"
                 : type == ShaderFunctionType.FragmentEntryPoint ? "frag"
                 : "comp";
             string outputPath = shaderPath + ".spv";
-            string args = $"-V -S {stage} {shaderPath} -o {outputPath}";
+            string args = $"-V -S {stage} {shaderPath} -o {outputPath} -e {entryPoint} --source-entrypoint {sourceEntryPoint}";
             try
             {
 

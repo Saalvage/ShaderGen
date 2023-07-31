@@ -412,6 +412,8 @@ namespace ShaderGen
             return $"({type}) {expression}";
         }
 
+        internal virtual string CorrectEntryPointName(string entryPoint) => entryPoint;
+
         protected virtual ShaderMethodVisitor VisitShaderMethod(string setName, ShaderFunction func)
         {
             return new ShaderMethodVisitor(Compilation, setName, func, this);
