@@ -14,7 +14,9 @@ using CommandLine;
 using ShaderGen.Glsl;
 using ShaderGen.Hlsl;
 using ShaderGen.Metal;
-using SharpDX.D3DCompiler;
+using SharpGen.Runtime;
+using Vortice.D3DCompiler;
+using Vortice.Dxc;
 
 namespace ShaderGen.App
 {
@@ -296,8 +298,7 @@ namespace ShaderGen.App
             Type langType = lang.GetType();
             if (langType == typeof(HlslBackend))
             {
-                bool result = CompileHlsl(shaderPath, entryPoint, type, out string path, debug);
-                paths = new[] { path };
+                bool result = CompileHlsl(shaderPath, entryPoint, type, out paths, debug);
                 return result;
             }
             else if (langType == typeof(Glsl450Backend) && IsGlslangValidatorAvailable())
@@ -320,90 +321,91 @@ namespace ShaderGen.App
             }
         }
 
-        private static bool CompileHlsl(string shaderPath, string entryPoint, ShaderFunctionType type, out string path, bool debug)
+        private static bool CompileHlsl(string shaderPath, string entryPoint, ShaderFunctionType type, out string[] paths, bool debug)
         {
-            return CompileHlslBySharpDX(shaderPath, entryPoint, type, out path, debug);
+            string pathDXBC = null;
+            string pathDXIL = null;
+            var result = CompileHlslByD3DCompiler(shaderPath, entryPoint, type, out pathDXBC, debug) 
+                         && CompileHlslByDXC(shaderPath, entryPoint, type, out pathDXIL, debug);
+            paths = new[] { pathDXBC, pathDXIL };
+            return result;
         }
 
-        [Obsolete]
-        private static bool CompileHlslByFXC(string shaderPath, string entryPoint, ShaderFunctionType type, out string path, bool debug)
+        private static bool CompileHlslByD3DCompiler(string shaderPath, string entryPoint, ShaderFunctionType type, out string path, bool debug)
         {
             try
             {
-                string profile = type == ShaderFunctionType.VertexEntryPoint ? "vs_5_0"
-                    : type == ShaderFunctionType.FragmentEntryPoint ? "ps_5_0"
-                    : "cs_5_0";
-                string outputPath = shaderPath + ".bytes";
-                string args = $"/T \"{profile}\" /E \"{entryPoint}\" \"{shaderPath}\" /Fo \"{outputPath}\"";
-                if (debug)
-                {
-                    args += " /Od /Zi";
-                }
-                else
-                {
-                    args += " /O3";
-                }
-                string fxcPath = FindFxcExe();
-                ProcessStartInfo psi = new ProcessStartInfo(fxcPath, args);
-                psi.RedirectStandardOutput = true;
-                psi.RedirectStandardError = true;
-                Process p = new Process() { StartInfo = psi };
-                p.Start();
-                var stdOut = p.StandardOutput.ReadToEndAsync();
-                var stdErr = p.StandardError.ReadToEndAsync();
-                bool exited = p.WaitForExit(60000);
+                var outputPath = shaderPath + ".dxbc";
 
-                if (exited && p.ExitCode == 0)
+                var profile = type switch {
+                    ShaderFunctionType.VertexEntryPoint => "vs_5_0",
+                    ShaderFunctionType.FragmentEntryPoint => "ps_5_0",
+                    ShaderFunctionType.ComputeEntryPoint => "cs_5_0",
+                };
+
+                var shaderFlags = debug
+                    ? ShaderFlags.SkipOptimization | ShaderFlags.Debug
+                    : ShaderFlags.OptimizationLevel3;
+
+                try
                 {
+                    var compilationResult = Compiler.CompileFromFile(shaderPath, entryPoint, profile, shaderFlags);
+
+                    using var fileStream = File.OpenWrite(outputPath);
+                    fileStream.Write(compilationResult.Span);
                     path = outputPath;
                     return true;
                 }
-                else
+                catch (SharpGenException e)
                 {
-                    string message = $"StdOut: {stdOut.Result}, StdErr: {stdErr.Result}";
-                    Console.WriteLine($"Failed to compile HLSL: {message}.");
+                    Console.WriteLine($"Failed to compile HLSL: {e.Message}");
                 }
+
             }
             catch (Win32Exception)
             {
-                Console.WriteLine("Unable to launch fxc tool.");
+                Console.WriteLine("Unable to invoke D3D compiler.");
             }
 
             path = null;
             return false;
         }
 
-        private static bool CompileHlslBySharpDX(string shaderPath, string entryPoint, ShaderFunctionType type, out string path, bool debug)
+        private static bool CompileHlslByDXC(string shaderPath, string entryPoint, ShaderFunctionType type, out string path, bool debug)
         {
             try
             {
-                string profile = type == ShaderFunctionType.VertexEntryPoint ? "vs_5_0"
-                    : type == ShaderFunctionType.FragmentEntryPoint ? "ps_5_0"
-                    : "cs_5_0";
-                string outputPath = shaderPath + ".bytes";
+                var outputPath = shaderPath + ".dxil";
 
-                ShaderFlags shaderFlags = debug
-                    ? ShaderFlags.SkipOptimization | ShaderFlags.Debug
-                    : ShaderFlags.OptimizationLevel3;
-                CompilationResult compilationResult = ShaderBytecode.CompileFromFile(
-                    shaderPath,
-                    entryPoint,
-                    profile,
-                    shaderFlags,
-                    EffectFlags.None);
+                var dxShaderStage = type switch {
+                    ShaderFunctionType.VertexEntryPoint => DxcShaderStage.Vertex,
+                    ShaderFunctionType.FragmentEntryPoint => DxcShaderStage.Pixel,
+                    ShaderFunctionType.ComputeEntryPoint => DxcShaderStage.Compute,
+                };
 
-                if (null == compilationResult.Bytecode)
+                DxcCompilerOptions dxOptions = debug
+                    ? new() { SkipOptimizations = true, EnableDebugInfo = true }
+                    : new() { OptimizationLevel = 3 };
+
+                dxOptions.ShaderModel = DxcShaderModel.Model6_0;
+
+                using var compilationResult = DxcCompiler.Compile(dxShaderStage, File.ReadAllText(shaderPath), entryPoint, dxOptions);
+
+                if (compilationResult.GetStatus() != Result.Ok)
                 {
-                    Console.WriteLine($"Failed to compile HLSL: {compilationResult.Message}.");
+                    Console.WriteLine($"Failed to compile HLSL: {compilationResult.GetErrors()}");
                 }
                 else
                 {
-                    compilationResult.Bytecode.Save(File.OpenWrite(outputPath));
+                    using var fileStream = File.OpenWrite(outputPath);
+                    fileStream.Write(compilationResult.GetObjectBytecode());
+                    path = outputPath;
+                    return true;
                 }
             }
             catch (Win32Exception)
             {
-                Console.WriteLine("Unable to invoke HLSL compiler library.");
+                Console.WriteLine("Unable to invoke DXC.");
             }
 
             path = null;
@@ -487,18 +489,6 @@ namespace ShaderGen.App
             {
                 File.Delete(bitcodePath);
             }
-        }
-
-        [Obsolete]
-        public static bool IsFxcAvailable()
-        {
-            if (!s_fxcAvailable.HasValue)
-            {
-                s_fxcPath = FindFxcExe();
-                s_fxcAvailable = s_fxcPath != null;
-            }
-
-            return s_fxcAvailable.Value;
         }
 
         public static bool IsGlslangValidatorAvailable()
@@ -593,23 +583,6 @@ namespace ShaderGen.App
             }
 
             throw new InvalidOperationException("Invalid backend type: " + lang.GetType().Name);
-        }
-
-        [Obsolete]
-        private static string FindFxcExe()
-        {
-            const string WindowsKitsFolder = @"C:\Program Files (x86)\Windows Kits";
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && Directory.Exists(WindowsKitsFolder))
-            {
-                IEnumerable<string> paths = Directory.EnumerateFiles(
-                    WindowsKitsFolder,
-                    "fxc.exe",
-                    SearchOption.AllDirectories);
-                string path = paths.FirstOrDefault(s => !s.Contains("arm"));
-                return path;
-            }
-
-            return null;
         }
 
         private static string GetXcodePlatformPath(string sdk)
