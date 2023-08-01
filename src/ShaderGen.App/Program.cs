@@ -47,6 +47,12 @@ namespace ShaderGen.App
 
             [Option('d', "debug", Required = false, HelpText = "Compiles the shader with debug information when supported.")]
             public bool Debug { get; set; }
+
+            [Option("glsl-no-yflip", Required = false, HelpText = "Whether to invert the y coordinate in GLSL shaders to accomodate the difference in screen coordinate systems between DX and GL/Vulkan.")]
+            public bool GlslNoYFlip { get; set; }
+
+            [Option("glsl-no-depth-remap", Required = false, HelpText = "Whether to map GL's [-1, 1] depth range to [0, 1] like in DX and Vulkan.")]
+            public bool GlslNoDepthRemap { get; set; }
         }
 
         private static string s_fxcPath;
@@ -149,10 +155,17 @@ namespace ShaderGen.App
                 references,
                 options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
+            GlslOptions ApplyOverrides(GlslOptions glslOpt)
+                => glslOpt with
+                {
+                    CorrectClipSpace = opt.GlslNoYFlip ? false : glslOpt.CorrectClipSpace,
+                    CorrectDepth = opt.GlslNoDepthRemap ? false : glslOpt.CorrectDepth
+                };
+
             HlslBackend hlsl = new HlslBackend(compilation);
-            Glsl330Backend glsl330 = new Glsl330Backend(compilation);
-            GlslEs300Backend glsles300 = new GlslEs300Backend(compilation);
-            Glsl450Backend glsl450 = new Glsl450Backend(compilation);
+            Glsl330Backend glsl330 = new Glsl330Backend(compilation, ApplyOverrides(Glsl330Backend.DefaultOptions));
+            GlslEs300Backend glsles300 = new GlslEs300Backend(compilation, ApplyOverrides(GlslEs300Backend.DefaultOptions));
+            Glsl450Backend glsl450 = new Glsl450Backend(compilation, ApplyOverrides(Glsl450Backend.DefaultOptions));
             MetalBackend metal = new MetalBackend(compilation);
             LanguageBackend[] languages = new LanguageBackend[]
             {

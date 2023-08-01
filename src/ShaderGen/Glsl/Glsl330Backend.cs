@@ -7,7 +7,13 @@ namespace ShaderGen.Glsl
 {
     public class Glsl330Backend : GlslBackendBase
     {
-        public Glsl330Backend(Compilation compilation) : base(compilation)
+        public static GlslOptions DefaultOptions { get; } = new(true, false);
+
+        public Glsl330Backend(Compilation compilation) : base(compilation, DefaultOptions)
+        {
+        }
+
+        public Glsl330Backend(Compilation compilation, GlslOptions options) : base(compilation, options)
         {
         }
 
@@ -150,11 +156,6 @@ namespace ShaderGen.Glsl
             }
 
             sb.AppendLine($"{qualifier} {normalizedType} {identifier};");
-        }
-
-        protected override void EmitGlPositionCorrection(StringBuilder sb)
-        {
-            sb.AppendLine("    gl_Position.z = gl_Position.z * 2.0 - gl_Position.w;");
         }
     }
 }

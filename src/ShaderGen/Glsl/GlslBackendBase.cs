@@ -9,11 +9,14 @@ namespace ShaderGen.Glsl
 {
     public abstract class GlslBackendBase : LanguageBackend
     {
+        private readonly GlslOptions _options;
+
         protected readonly HashSet<string> _uniformNames = new HashSet<string>();
         protected readonly HashSet<string> _ssboNames = new HashSet<string>();
 
-        public GlslBackendBase(Compilation compilation) : base(compilation)
+        protected GlslBackendBase(Compilation compilation, GlslOptions options) : base(compilation)
         {
+            _options = options;
         }
 
         protected void WriteStructure(StringBuilder sb, StructureDefinition sd)
@@ -303,7 +306,16 @@ namespace ShaderGen.Glsl
                 }
 
                 sb.AppendLine($"    gl_Position = {CorrectIdentifier("output")}.{CorrectIdentifier(systemPositionField.Name)};");
-                EmitGlPositionCorrection(sb);
+                
+                if (_options.CorrectDepth)
+                {
+                    sb.AppendLine("    gl_Position.z = gl_Position.z * 2.0 - gl_Position.w;");
+                }
+
+                if (_options.CorrectClipSpace)
+                {
+                    sb.AppendLine("    gl_Position.y = -gl_Position.y; // Correct for Vulkan clip coordinates");
+                }
             }
             else if (entryFunction.Type == ShaderFunctionType.FragmentEntryPoint)
             {
@@ -417,7 +429,6 @@ namespace ShaderGen.Glsl
             string normalizedType,
             string normalizedIdentifier,
             int index);
-        protected abstract void EmitGlPositionCorrection(StringBuilder sb);
 
         internal override string CorrectCastExpression(string type, string expression)
         {

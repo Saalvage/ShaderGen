@@ -20,6 +20,8 @@
       <_SGArgs>$(_SGArgs) --src " $(_SGSourcesResponsePath) "</_SGArgs>
       <_SGArgs>$(_SGArgs) --out " $(ShaderOutputPath) "</_SGArgs>
       <_SGArgs>$(_SGArgs) --genlist "$(_SGGeneratedFilesList)"</_SGArgs>
+      <_SGArgs Condition="'$(GlslNoYFlip)' == 'true'">$(_SGArgs) --glsl-no-yflip</_SGArgs>
+      <_SGArgs Condition="'$(GlslNoDepthRemap)' == 'true'">$(_SGArgs) --glsl-no-depth-remap</_SGArgs>
       <_SGArgs Condition="'$(ListAllShaderPaths)' == 'true'">$(_SGArgs) --listall</_SGArgs>
       <_SGArgs Condition="'$(ShaderProcessorAssembly)' != ''">$(_SGArgs) --processor "$(ShaderProcessorAssembly)"</_SGArgs>
       <_SGArgs Condition="'$(ShaderProcessorArgs)' != ''">$(_SGArgs) --processorargs "$(ShaderProcessorArgs)"</_SGArgs>

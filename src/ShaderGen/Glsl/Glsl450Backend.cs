@@ -6,7 +6,13 @@ namespace ShaderGen.Glsl
 {
     public class Glsl450Backend : GlslBackendBase
     {
-        public Glsl450Backend(Compilation compilation) : base(compilation)
+        public static GlslOptions DefaultOptions { get; } = new(false, true);
+
+        public Glsl450Backend(Compilation compilation) : base(compilation, DefaultOptions)
+        {
+        }
+
+        public Glsl450Backend(Compilation compilation, GlslOptions options) : base(compilation, options)
         {
         }
 
@@ -170,11 +176,6 @@ namespace ShaderGen.Glsl
         {
             string storageSpecPart = storageSpec != null ? $"{storageSpec}, " : string.Empty;
             return $"layout({storageSpecPart}set = {rd.Set}, binding = {rd.Binding})";
-        }
-
-        protected override void EmitGlPositionCorrection(StringBuilder sb)
-        {
-            sb.AppendLine("    gl_Position.y = -gl_Position.y; // Correct for Vulkan clip coordinates");
         }
     }
 }
