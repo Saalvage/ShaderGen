@@ -20,12 +20,13 @@
       <_SGArgs>$(_SGArgs) --src " $(_SGSourcesResponsePath) "</_SGArgs>
       <_SGArgs>$(_SGArgs) --out " $(ShaderOutputPath) "</_SGArgs>
       <_SGArgs>$(_SGArgs) --genlist "$(_SGGeneratedFilesList)"</_SGArgs>
-      <_SGArgs Condition="'$(GlslNoYFlip)' == 'true'">$(_SGArgs) --glsl-no-yflip</_SGArgs>
-      <_SGArgs Condition="'$(GlslNoDepthRemap)' == 'true'">$(_SGArgs) --glsl-no-depth-remap</_SGArgs>
       <_SGArgs Condition="'$(ListAllShaderPaths)' == 'true'">$(_SGArgs) --listall</_SGArgs>
       <_SGArgs Condition="'$(ShaderProcessorAssembly)' != ''">$(_SGArgs) --processor "$(ShaderProcessorAssembly)"</_SGArgs>
       <_SGArgs Condition="'$(ShaderProcessorArgs)' != ''">$(_SGArgs) --processorargs "$(ShaderProcessorArgs)"</_SGArgs>
+      <_SGArgs Condition="'$(UseFolders)' == 'true'">$(_SGArgs) --folders</_SGArgs>
       <_SGArgs Condition="'$(DebugShader)' == 'true' or '$(Configuration)' == 'Debug'">$(_SGArgs) --debug</_SGArgs>
+      <_SGArgs Condition="'$(GlslNoYFlip)' == 'true'">$(_SGArgs) --glsl-no-yflip</_SGArgs>
+      <_SGArgs Condition="'$(GlslNoDepthRemap)' == 'true'">$(_SGArgs) --glsl-no-depth-remap</_SGArgs>
     </PropertyGroup>
 
     <Delete Files="$(_SGGeneratedFilesList)" Condition="Exists($(_SGGeneratedFilesList))" ContinueOnError="true" />

@@ -45,6 +45,9 @@ namespace ShaderGen.App
             [Option("processorargs", Required = false, HelpText = "Custom information passed to IShaderSetProcessor.")]
             public string ProcessorArgs { get; set; }
 
+            [Option('f', "folders", Required = false, HelpText = "Whether to organize the output shaders in folders.")]
+            public bool UseFolders { get; set; }
+
             [Option('d', "debug", Required = false, HelpText = "Compiles the shader with debug information when supported.")]
             public bool Debug { get; set; }
 
@@ -223,17 +226,34 @@ namespace ShaderGen.App
                 foreach (GeneratedShaderSet set in sets)
                 {
                     string name = set.Name;
-                    if (set.VertexShaderCode != null)
+
+                    if (opt.UseFolders)
                     {
-                        string vsOutName = name + "-vertex." + extension;
-                        string vsOutPath = Path.Combine(opt.OutputPath, vsOutName);
-                        File.WriteAllText(vsOutPath, set.VertexShaderCode, outputEncoding);
-                        bool succeeded = CompileCode(
+                        Directory.CreateDirectory(Path.Combine(opt.OutputPath, name));
+                    }
+
+                    void CompileAndSave(string code, ShaderFunction function)
+                    {
+                        if (code == null)
+                        {
+                            return;
+                        }
+
+                        var functionTypeStr = function.Type switch
+                        {
+                            ShaderFunctionType.VertexEntryPoint => "vertex",
+                            ShaderFunctionType.FragmentEntryPoint => "fragment",
+                            ShaderFunctionType.ComputeEntryPoint => "compute",
+                        };
+                        var outName = $"{name}{(opt.UseFolders ? '/' : '-')}{functionTypeStr}.{extension}";
+                        var outPath = Path.Combine(opt.OutputPath, outName);
+                        File.WriteAllText(outPath, code, outputEncoding);
+                        var succeeded = CompileCode(
                             lang,
-                            vsOutPath,
-                            set.VertexFunction.Name,
-                            ShaderFunctionType.VertexEntryPoint,
-                            out string[] genPaths,
+                            outPath,
+                            function.Name,
+                            function.Type,
+                            out var genPaths,
                             opt.Debug);
                         if (succeeded)
                         {
@@ -241,51 +261,13 @@ namespace ShaderGen.App
                         }
                         if (!succeeded || opt.ListAllFiles)
                         {
-                            generatedFilePaths.Add(vsOutPath);
+                            generatedFilePaths.Add(outPath);
                         }
                     }
-                    if (set.FragmentShaderCode != null)
-                    {
-                        string fsOutName = name + "-fragment." + extension;
-                        string fsOutPath = Path.Combine(opt.OutputPath, fsOutName);
-                        File.WriteAllText(fsOutPath, set.FragmentShaderCode, outputEncoding);
-                        bool succeeded = CompileCode(
-                            lang,
-                            fsOutPath,
-                            set.FragmentFunction.Name,
-                            ShaderFunctionType.FragmentEntryPoint,
-                            out string[] genPaths,
-                            opt.Debug);
-                        if (succeeded)
-                        {
-                            generatedFilePaths.AddRange(genPaths);
-                        }
-                        if (!succeeded || opt.ListAllFiles)
-                        {
-                            generatedFilePaths.Add(fsOutPath);
-                        }
-                    }
-                    if (set.ComputeShaderCode != null)
-                    {
-                        string csOutName = name + "-compute." + extension;
-                        string csOutPath = Path.Combine(opt.OutputPath, csOutName);
-                        File.WriteAllText(csOutPath, set.ComputeShaderCode, outputEncoding);
-                        bool succeeded = CompileCode(
-                            lang,
-                            csOutPath,
-                            set.ComputeFunction.Name,
-                            ShaderFunctionType.ComputeEntryPoint,
-                            out string[] genPaths,
-                            opt.Debug);
-                        if (succeeded)
-                        {
-                            generatedFilePaths.AddRange(genPaths);
-                        }
-                        if (!succeeded || opt.ListAllFiles)
-                        {
-                            generatedFilePaths.Add(csOutPath);
-                        }
-                    }
+
+                    CompileAndSave(set.VertexShaderCode, set.VertexFunction);
+                    CompileAndSave(set.FragmentShaderCode, set.FragmentFunction);
+                    CompileAndSave(set.ComputeShaderCode, set.ComputeFunction);
                 }
             }
 
