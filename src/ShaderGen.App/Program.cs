@@ -332,7 +332,8 @@ namespace ShaderGen.App
             {
                 var outputPath = shaderPath + ".dxbc";
 
-                var profile = type switch {
+                var profile = type switch
+                {
                     ShaderFunctionType.VertexEntryPoint => "vs_5_0",
                     ShaderFunctionType.FragmentEntryPoint => "ps_5_0",
                     ShaderFunctionType.ComputeEntryPoint => "cs_5_0",
@@ -346,7 +347,7 @@ namespace ShaderGen.App
                 {
                     var compilationResult = Compiler.CompileFromFile(shaderPath, entryPoint, profile, shaderFlags);
 
-                    using var fileStream = File.OpenWrite(outputPath);
+                    using var fileStream = File.Create(outputPath);
                     fileStream.Write(compilationResult.Span);
                     path = outputPath;
                     return true;
@@ -372,7 +373,8 @@ namespace ShaderGen.App
             {
                 var outputPath = shaderPath + ".dxil";
 
-                var dxShaderStage = type switch {
+                var dxShaderStage = type switch
+                {
                     ShaderFunctionType.VertexEntryPoint => DxcShaderStage.Vertex,
                     ShaderFunctionType.FragmentEntryPoint => DxcShaderStage.Pixel,
                     ShaderFunctionType.ComputeEntryPoint => DxcShaderStage.Compute,
@@ -392,7 +394,7 @@ namespace ShaderGen.App
                 }
                 else
                 {
-                    using var fileStream = File.OpenWrite(outputPath);
+                    using var fileStream = File.Create(outputPath);
                     fileStream.Write(compilationResult.GetObjectBytecode());
                     path = outputPath;
                     return true;
