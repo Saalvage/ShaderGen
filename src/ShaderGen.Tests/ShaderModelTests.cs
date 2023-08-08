@@ -119,11 +119,11 @@ namespace ShaderGen.Tests
             ShaderModel shaderModel = Compile("TestShaders.RecordStructs.VS").Model;
 
             Assert.Single(shaderModel.VertexResources);
-            Assert.Equal(SemanticType.Position, shaderModel.Structures[1].Fields[0].SemanticType);
-            Assert.Equal(SemanticType.TextureCoordinate, shaderModel.Structures[1].Fields[1].SemanticType);
-
-            Assert.Equal(SemanticType.SystemPosition, shaderModel.Structures[2].Fields[0].SemanticType);
+            Assert.Equal(SemanticType.Position, shaderModel.Structures[2].Fields[0].SemanticType);
             Assert.Equal(SemanticType.TextureCoordinate, shaderModel.Structures[2].Fields[1].SemanticType);
+
+            Assert.Equal(SemanticType.SystemPosition, shaderModel.Structures[1].Fields[0].SemanticType);
+            Assert.Equal(SemanticType.TextureCoordinate, shaderModel.Structures[1].Fields[1].SemanticType);
         }
 
         [Fact]

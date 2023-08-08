@@ -77,18 +77,6 @@ namespace ShaderGen
             ResourceDefinition[] computeResources = null;
             ShaderFunctionAndMethodDeclarationSyntax[] contextFunctions = context.Functions.ToArray();
 
-            // Discover all parameter types
-            foreach (ShaderFunctionAndMethodDeclarationSyntax sf in contextFunctions)
-            {
-                foreach (ParameterDefinition funcParam in sf.Function.Parameters)
-                {
-                    if (funcParam.Symbol.Type.TypeKind == TypeKind.Struct)
-                    {
-                        ForceTypeDiscovery(setName, funcParam.Type);
-                    }
-                }
-            }
-
             foreach (ShaderFunctionAndMethodDeclarationSyntax sf in contextFunctions)
             {
                 if (sf.Function.IsEntryPoint)
