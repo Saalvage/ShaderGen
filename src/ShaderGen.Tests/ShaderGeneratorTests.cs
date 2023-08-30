@@ -152,6 +152,28 @@ namespace ShaderGen.Tests
         [MemberData(nameof(ShaderSets))]
         public void MetalCompile(string vsName, string fsName) => TestCompile(GraphicsBackend.Metal, vsName, fsName);
 
+
+        [SkippableTheory(typeof(RequiredToolFeatureMissingException))]
+        [MemberData(nameof(ComputeShaders))]
+        public void HlslCompileCompute(string csName) => TestCompile(GraphicsBackend.Direct3D11, null, null, csName);
+
+        [SkippableTheory(typeof(RequiredToolFeatureMissingException))]
+        [MemberData(nameof(ComputeShaders))]
+        public void Glsl330CompileCompute(string csName) => TestCompile(GraphicsBackend.OpenGL, null, null, csName);
+
+        // TODO: Fix!
+        [SkippableTheory(typeof(RequiredToolFeatureMissingException), Skip = "Broken!")]
+        [MemberData(nameof(ComputeShaders))]
+        public void GlslEs300CompileCompute(string csName) => TestCompile(GraphicsBackend.OpenGLES, null, null, csName);
+
+        [SkippableTheory(typeof(RequiredToolFeatureMissingException))]
+        [MemberData(nameof(ComputeShaders))]
+        public void Glsl450CompileCompute(string csName) => TestCompile(GraphicsBackend.Vulkan, null, null, csName);
+
+        [SkippableTheory(typeof(RequiredToolFeatureMissingException))]
+        [MemberData(nameof(ComputeShaders))]
+        public void MetalCompileCompute(string csName) => TestCompile(GraphicsBackend.Metal, null, null, csName);
+
         public static IEnumerable<object[]> ErrorSets()
         {
             yield return new object[] { "TestShaders.MissingFunctionAttribute.VS", null };
