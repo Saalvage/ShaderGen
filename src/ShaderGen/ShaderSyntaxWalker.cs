@@ -159,7 +159,7 @@ namespace ShaderGen
 
         private static int GetAttributeArgumentIntValue(AttributeSyntax attr, int index, SemanticModel semanticModel)
         {
-            if (attr.ArgumentList.Arguments.Count < index + 1)
+            if (attr.ArgumentList == null || attr.ArgumentList.Arguments.Count <= index)
             {
                 throw new ShaderGenerationException(
                     "Too few arguments in attribute " + attr.ToFullString() + ". Required + " + (index + 1));
@@ -250,18 +250,35 @@ namespace ShaderGen
             base.VisitFieldDeclaration(node);
         }
 
-        public override void VisitVariableDeclaration(VariableDeclarationSyntax node)
-        {
+        public override void VisitPropertyDeclaration(PropertyDeclarationSyntax node) {
+            if (node.Modifiers.Any(x => x.IsKind(SyntaxKind.StaticKeyword)))
+            {
+                return;
+            }
+
+            HandleResourceDeclaration(node, node.Type, node.Identifier.Text);
+        }
+
+        public override void VisitVariableDeclaration(VariableDeclarationSyntax node) {
             if (node.Variables.Count != 1)
             {
                 throw new ShaderGenerationException("Cannot declare multiple variables together.");
             }
 
-            VariableDeclaratorSyntax vds = node.Variables[0];
+            HandleResourceDeclaration(node.Parent, node.Type, node.Variables[0].Identifier.Text);
+        }
 
-            string resourceName = vds.Identifier.Text;
-            TypeInfo typeInfo = GetModel(node).GetTypeInfo(node.Type);
-            string fullTypeName = GetModel(node).GetFullTypeName(node.Type);
+        public void HandleResourceDeclaration(SyntaxNode node, TypeSyntax type, string name)
+        {
+            if (node.DescendantNodes()
+                .OfType<AttributeSyntax>()
+                .Any(x => x.ToString().Contains("ResourceIgnore")))
+            {
+                return;
+            }
+
+            TypeInfo typeInfo = GetModel(node).GetTypeInfo(type);
+            string fullTypeName = GetModel(node).GetFullTypeName(type);
             TypeReference valueType = new TypeReference(fullTypeName, typeInfo.Type);
             ShaderResourceKind kind = ClassifyResourceKind(fullTypeName);
 
@@ -269,7 +286,7 @@ namespace ShaderGen
                 || kind == ShaderResourceKind.RWStructuredBuffer
                 || kind == ShaderResourceKind.RWTexture2D)
             {
-                valueType = ParseElementType(vds);
+                valueType = ParseElementType(type);
             }
 
             int set = 0; // Default value if not otherwise specified.
@@ -280,7 +297,7 @@ namespace ShaderGen
 
             int resourceBinding = GetAndIncrementBinding(set);
 
-            ResourceDefinition rd = new ResourceDefinition(resourceName, set, resourceBinding, valueType, kind);
+            ResourceDefinition rd = new ResourceDefinition(name, set, resourceBinding, valueType, kind);
             if (kind == ShaderResourceKind.Uniform)
             {
                 ValidateUniformType(typeInfo);
@@ -289,10 +306,8 @@ namespace ShaderGen
             foreach (LanguageBackend b in _backends) { b.AddResource(_shaderSet.Name, rd); }
         }
 
-        private TypeReference ParseElementType(VariableDeclaratorSyntax vds)
+        private TypeReference ParseElementType(TypeSyntax fieldType)
         {
-            FieldDeclarationSyntax fieldDecl = (FieldDeclarationSyntax)vds.Parent.Parent;
-            TypeSyntax fieldType = fieldDecl.Declaration.Type;
             while (fieldType is QualifiedNameSyntax qns)
             {
                 fieldType = qns.Right;
@@ -300,8 +315,8 @@ namespace ShaderGen
 
             GenericNameSyntax gns = (GenericNameSyntax)fieldType;
             TypeSyntax type = gns.TypeArgumentList.Arguments[0];
-            string fullName = GetModel(vds).GetFullTypeName(type);
-            return new TypeReference(fullName, GetModel(vds).GetTypeInfo(type).Type);
+            string fullName = GetModel(fieldType).GetFullTypeName(type);
+            return new TypeReference(fullName, GetModel(fieldType).GetTypeInfo(type).Type);
         }
 
         private int GetAndIncrementBinding(int set)
@@ -394,9 +409,9 @@ namespace ShaderGen
         }
 
 
-        private bool GetResourceDecl(VariableDeclarationSyntax node, out AttributeSyntax attr)
+        private bool GetResourceDecl(SyntaxNode node, out AttributeSyntax attr)
         {
-            attr = (node.Parent.DescendantNodes().OfType<AttributeSyntax>().FirstOrDefault(
+            attr = (node.DescendantNodes().OfType<AttributeSyntax>().FirstOrDefault(
                 attrSyntax => attrSyntax.ToString().Contains("Resource")));
             return attr != null;
         }

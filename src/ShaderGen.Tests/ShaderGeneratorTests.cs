@@ -72,6 +72,8 @@ namespace ShaderGen.Tests
             yield return new object[] { "TestShaders.RecordStructs.VS", null };
             yield return new object[] { "TestShaders.ImplicitTyping.VS", null };
             yield return new object[] { "TestShaders.AutoProperties.VS", null };
+            yield return new object[] { "TestShaders.ResourceIgnore.VS", null };
+            yield return new object[] { "TestShaders.PropertyResource.VS", null };
         }
 
         public static IEnumerable<object[]> ComputeShaders()

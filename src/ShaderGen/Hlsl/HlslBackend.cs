@@ -191,7 +191,7 @@ namespace ShaderGen.Hlsl
             int setIndex = 0;
             foreach (ResourceDefinition[] set in resourcesBySet)
             {
-                Debug.Assert(set[0].Set == setIndex);
+                Debug.Assert(set[0].Set == setIndex, $"Set {set[0].Name} skips index {setIndex}");
                 setIndex += 1;
 
                 foreach (ResourceDefinition rd in set)

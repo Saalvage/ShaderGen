@@ -493,8 +493,8 @@ namespace ShaderGen
                 // TODO: Share code to format constant values.
                 return string.Format(CultureInfo.InvariantCulture, "{0}", fs.ConstantValue);
             }
-            else if (symbol.Kind == SymbolKind.Field && containingTypeName == _containingTypeName
-                     || symbol is IPropertySymbol ps && Utilities.IsAutoProperty(ps))
+            else if (containingTypeName == _containingTypeName && (symbol.Kind == SymbolKind.Field
+                     || symbol is IPropertySymbol ps && Utilities.IsAutoProperty(ps)))
             {
                 string symbolName = symbol.Name;
                 ResourceDefinition referencedResource = _backend.GetContext(_setName).Resources.SingleOrDefault(rd => rd.Name == symbolName);
@@ -511,9 +511,11 @@ namespace ShaderGen
 
                 return _backend.CorrectFieldAccess(symbolInfo);
             }
-            else if (symbol.Kind == SymbolKind.Property)
+            else if (symbol is IPropertySymbol ps2)
             {
-                return _backend.FormatInvocation(_setName, containingTypeName, symbol.Name, Array.Empty<InvocationParameterInfo>());
+                return Utilities.IsAutoProperty(ps2)
+                    ? _backend.CorrectIdentifier(_backend.CSharpToShaderIdentifierName(symbolInfo))
+                    : _backend.FormatInvocation(_setName, containingTypeName, symbol.Name, Array.Empty<InvocationParameterInfo>());
             }
             else if (symbol is ILocalSymbol ls && ls.HasConstantValue)
             {
