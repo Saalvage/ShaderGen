@@ -6,14 +6,19 @@
     <_SGGeneratedFilesList>$(IntermediateOutputPath)_sggeneratedfiles.txt</_SGGeneratedFilesList>
   </PropertyGroup>
 
-  <Target Name="GenerateShaderCode" AfterTargets="ResolveReferences">
+  <Target Name="GenerateShaderCode" AfterTargets="Compile">
     <Message Text="Generating shader code." />
 
     <Error Condition="'$(_SGExePath)' == ''" Text="The ShaderGen tool was not located or set." />
     <Error Condition="'$(ShaderOutputPath)' == ''" Text="ShaderOutputPath must be set." />
 
+    <ItemGroup>
+      <Generated Include="obj/$(Configuration)/$(TargetFramework)/generated/**/*.*" />
+    </ItemGroup>
+
     <WriteLinesToFile Lines="@(ReferencePath)" File="$(_SGReferencesResponsePath)" Overwrite="true" />
     <WriteLinesToFile Lines="@(Compile)" File="$(_SGSourcesResponsePath)" Overwrite="true" />
+    <WriteLinesToFile Lines="@(Generated)" File="$(_SGSourcesResponsePath)" Overwrite="false" />
 
     <PropertyGroup>
       <_SGArgs>$(_SGArgs) --ref " $(_SGReferencesResponsePath) "</_SGArgs>
