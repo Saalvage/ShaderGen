@@ -1,15 +1,14 @@
 ﻿using System.Linq;
 using Xunit;
-using static TestShaders.VeldridShaders.UIntVertexAttribs;
 
 namespace ShaderGen.Tests
 {
     public static class ShaderSetDiscovererTests
     {
-        [Fact]
-        public static void ShaderSetAutoDiscovery()
+        private static void TestAutoDiscovery(string filePattern,
+            (string Name, string VS, string FS, string CS)[] expectedShaderSets)
         {
-            var compilation = TestUtil.GetCompilationFromFiles("ShaderSets.cs");
+            var compilation = TestUtil.GetCompilationFromFiles(filePattern);
             var ssd = new ShaderSetDiscoverer(compilation);
 
             foreach (var tree in compilation.SyntaxTrees)
@@ -19,7 +18,21 @@ namespace ShaderGen.Tests
 
             var shaderSets = ssd.GetShaderSets();
 
-            (string, string, string, string)[] shaderSetValues =
+            Assert.Equal(expectedShaderSets.Length, shaderSets.Count);
+            foreach (var (info, shaderSetValue) in shaderSets.Zip(expectedShaderSets))
+            {
+                var (name, vs, fs, cs) = shaderSetValue;
+                Assert.Equal(name, info.Name);
+                Assert.Equal(vs, info.VertexShader?.ToString());
+                Assert.Equal(fs, info.FragmentShader?.ToString());
+                Assert.Equal(cs, info.ComputeShader?.ToString());
+            }
+        }
+
+        [Fact]
+        public static void ShaderSetAutoDiscovery()
+        {
+            (string Name, string VS, string FS, string CS)[] shaderSetValues =
             {
                 ("VertexAndFragment", "TestShaders.Basic.VS", "TestShaders.Basic.FS", null),
                 ("VertexAndFragment2", "TestShaders.Basic.VS", "TestShaders.Basic.FS", null),
@@ -43,15 +56,16 @@ namespace ShaderGen.Tests
                 ("Compute3", null, null, "TestShaders.Compute.CS1"),
             };
 
-            Assert.Equal(shaderSetValues.Length, shaderSets.Count);
-            foreach (var (info, shaderSetValue) in shaderSets.Zip(shaderSetValues))
+            TestAutoDiscovery("ShaderSets.cs", shaderSetValues);
+        }
+
+        [Fact]
+        public static void ShaderSetPartialAutoDiscovery() {
+            TestAutoDiscovery("PartialClass.cs", new(string Name, string VS, string FS, string CS)[]
             {
-                var (name, vs, fs, cs) = shaderSetValue;
-                Assert.Equal(name, info.Name);
-                Assert.Equal(vs, info.VertexShader?.ToString());
-                Assert.Equal(fs, info.FragmentShader?.ToString());
-                Assert.Equal(cs, info.ComputeShader?.ToString());
-            }
+                ("CoolStuff", null, "TestShaders.PartialClass.FS", null),
+                ("PartialClass", "TestShaders.PartialClass.VS", "TestShaders.PartialClass.FS", null),
+            });
         }
 
         [Fact]

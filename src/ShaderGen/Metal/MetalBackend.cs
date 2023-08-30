@@ -70,7 +70,9 @@ namespace ShaderGen.Metal
             BackendContext setContext = GetContext(setName);
 
             List<ResourceDefinition[]> resourcesBySet = setContext.Resources.GroupBy(rd => rd.Set)
-                .Select(g => g.ToArray()).ToList();
+                .OrderBy(x => x.Key)
+                .Select(g => g.ToArray())
+                .ToList();
 
             List<string> resourceArgList = new List<string>();
             int bufferBinding = 0;

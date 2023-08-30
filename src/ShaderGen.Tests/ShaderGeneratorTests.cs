@@ -74,6 +74,7 @@ namespace ShaderGen.Tests
             yield return new object[] { "TestShaders.AutoProperties.VS", null };
             yield return new object[] { "TestShaders.ResourceIgnore.VS", null };
             yield return new object[] { "TestShaders.PropertyResource.VS", null };
+            yield return new object[] { "TestShaders.PartialClass.VS", "TestShaders.PartialClass.FS" };
         }
 
         public static IEnumerable<object[]> ComputeShaders()
@@ -81,11 +82,6 @@ namespace ShaderGen.Tests
             yield return new object[] { "TestShaders.SimpleCompute.CS" };
             yield return new object[] { "TestShaders.ComplexCompute.CS" };
         }
-
-        private static readonly HashSet<string> s_glslesSkippedShaders = new HashSet<string>()
-        {
-            "TestShaders.ComplexCompute.CS"
-        };
 
         private void TestCompile(GraphicsBackend graphicsBackend, string vsName, string fsName, string csName = null)
         {

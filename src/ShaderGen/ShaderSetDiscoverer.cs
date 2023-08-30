@@ -11,6 +11,15 @@ namespace ShaderGen
         private readonly HashSet<string> _discoveredNames = new HashSet<string>();
         private readonly List<ShaderSetInfo> _shaderSets = new List<ShaderSetInfo>();
 
+        private class FragmentCollection
+        {
+            public List<(string FuncName, string FuncAttr)> Functions = new();
+            public string? UnfulfilledName;
+            public string? UnfulfilledComputeName;
+        }
+
+        private readonly Dictionary<string, FragmentCollection> _partialFragments = new();
+
         private readonly Compilation _compilation;
         private SemanticModel _currentSemanticModel;
 
@@ -48,13 +57,23 @@ namespace ShaderGen
             string className = null;
             string fullClassName = null;
 
+            var isPartial = node.Modifiers.Any(x => x.IsKind(SyntaxKind.PartialKeyword));
+
+            if (isPartial)
+            {
+                InitializeNames();
+
+                var frag = GetFragment();
+                foreach (var candidate in GetFunctionCandidates(node))
+                    frag.Functions.Add(candidate);
+            }
+
             foreach (var (attr, attrName) in node.AttributeLists
                          .SelectMany(x => x.Attributes)
                          .Select(x => (x, Name: x.Name.ToString()))
                          .Where(x => x.Name.Contains("ShaderClass")))
             {
-                className ??= node.Identifier.Text;
-                fullClassName ??= Utilities.GetFullNamespace(node) + '.' + className;
+                InitializeNames();
 
                 string shaderName;
 
@@ -66,23 +85,21 @@ namespace ShaderGen
                     if (attr.ArgumentList?.Arguments.Any() ?? false)
                     {
                         cs = GetStringParam(attr, 0);
-                        AddComputeShaderInfo(shaderName, PrependClassName(cs));
+                        AddComputeShaderInfo(shaderName, PrependClassName(fullClassName, cs));
                         continue;
                     }
 
-                    foreach (var (funcName, funcAttr)
-                             in GetFunctionCandidates(node))
+                    if (isPartial)
                     {
-                        if (!funcAttr.Contains("ComputeShader"))
-                            continue;
+                        var frag = GetFragment();
+                        if (frag.UnfulfilledComputeName != null)
+                            throw new($"Multiple unfulfilled compute shader sets in partial class {fullClassName}");
 
-                        if (cs != null)
-                            throw new ShaderGenerationException($"ComputeShaderClassAttribute for class {fullClassName} has ambiguous shader");
-
-                        cs = funcName;
+                        frag.UnfulfilledComputeName = shaderName;
+                        continue;
                     }
 
-                    AddComputeShaderInfo(shaderName, PrependClassName(cs));
+                    ExtractAndAddCompute(fullClassName, shaderName, GetFunctionCandidates(node));
                     continue;
                 }
 
@@ -95,33 +112,39 @@ namespace ShaderGen
                     vs = GetStringParam(attr, 0);
                     fs = GetStringParam(attr, 1);
 
-                    AddShaderSetInfo(shaderName, PrependClassName(vs), PrependClassName(fs));
+                    AddShaderSetInfo(shaderName, PrependClassName(fullClassName, vs), PrependClassName(fullClassName, fs));
                     continue;
                 }
 
-                foreach (var (funcName, funcAttr) in GetFunctionCandidates(node))
+                if (isPartial)
                 {
-                    if (funcAttr.Contains("VertexShader"))
-                    {
-                        if (vs != null)
-                            throw new ShaderGenerationException($"ShaderClassAttribute for class {fullClassName} has ambiguous vertex shader");
+                    var frag = GetFragment();
+                    if (frag.UnfulfilledName != null)
+                        throw new($"Multiple unfulfilled shader sets in partial class {fullClassName}");
 
-                        vs = funcName;
-                    }
-                    else if (funcAttr.Contains("FragmentShader"))
-                    {
-                        if (fs != null)
-                            throw new ShaderGenerationException($"ShaderClassAttribute for class {fullClassName} has ambiguous fragment shader.");
-
-                        fs = funcName;
-                    }
+                    frag.UnfulfilledName = shaderName;
+                    continue;
                 }
 
-                AddShaderSetInfo(shaderName, PrependClassName(vs), PrependClassName(fs));
+                ExtractAndAdd(fullClassName, shaderName, GetFunctionCandidates(node), vs, fs);
             }
 
-            string PrependClassName(string functionName)
-                => functionName == null ? null : fullClassName + '.' + functionName;
+            void InitializeNames()
+            {
+                className ??= node.Identifier.Text;
+                fullClassName ??= Utilities.GetFullNamespace(node) + '.' + className;
+            }
+
+            FragmentCollection GetFragment()
+            {
+                if (!_partialFragments.TryGetValue(fullClassName, out var val))
+                {
+                    val = new();
+                    _partialFragments.Add(fullClassName, val);
+                }
+
+                return val;
+            }
         }
 
         public override void VisitAttribute(AttributeSyntax node)
@@ -219,7 +242,7 @@ namespace ShaderGen
             => node.Members
                 .OfType<MethodDeclarationSyntax>()
                 .SelectMany(x =>
-                    x.AttributeLists .SelectMany(x => x.Attributes, (_, y) => y.Name.ToString()),
+                    x.AttributeLists.SelectMany(x => x.Attributes, (_, y) => y.Name.ToString()),
                     (x, y) => (x.Identifier.Text, y));
 
         private bool TryGetTypeParam(AttributeSyntax node, int index, out (string Name, string FullName) typeInfo)
@@ -250,6 +273,65 @@ namespace ShaderGen
             return val.HasValue ? (string)val.Value : null;
         }
 
-        public IReadOnlyList<ShaderSetInfo> GetShaderSets() => _shaderSets;
+        private void ExtractAndAdd(string fullClassName, string shaderName,
+            IEnumerable<(string FuncName, string FuncAttr)> enumerable, string vs, string fs)
+        {
+            foreach (var (funcName, funcAttr) in enumerable)
+            {
+                if (funcAttr.Contains("VertexShader"))
+                {
+                    if (vs != null)
+                        throw new ShaderGenerationException($"ShaderClassAttribute for class {fullClassName} has ambiguous vertex shader");
+
+                    vs = funcName;
+                }
+                else if (funcAttr.Contains("FragmentShader"))
+                {
+                    if (fs != null)
+                        throw new ShaderGenerationException($"ShaderClassAttribute for class {fullClassName} has ambiguous fragment shader.");
+
+                    fs = funcName;
+                }
+            }
+
+            AddShaderSetInfo(shaderName, PrependClassName(fullClassName, vs), PrependClassName(fullClassName, fs));
+        }
+
+        public void ExtractAndAddCompute(string fullClassName, string shaderName, IEnumerable<(string FuncName, string FuncAttr)> enumerable)
+        {
+            string cs = null;
+
+            foreach (var (funcName, funcAttr) in enumerable)
+            {
+                if (!funcAttr.Contains("ComputeShader"))
+                    continue;
+
+                if (cs != null)
+                    throw new ShaderGenerationException($"ComputeShaderClassAttribute for class {fullClassName} has ambiguous shader");
+
+                cs = funcName;
+            }
+
+            AddComputeShaderInfo(shaderName, PrependClassName(fullClassName, cs));
+        }
+
+        private string PrependClassName(string fullClassName, string functionName)
+            => functionName == null ? null : fullClassName + '.' + functionName;
+
+        public IReadOnlyList<ShaderSetInfo> GetShaderSets() {
+            // Reconcile partial fragments.
+            foreach (var (fullClassName, fragment) in _partialFragments)
+            {
+                if (fragment.UnfulfilledName != null)
+                    ExtractAndAdd(fullClassName, fragment.UnfulfilledName, fragment.Functions, null, null);
+
+                if (fragment.UnfulfilledComputeName != null)
+                    ExtractAndAddCompute(fullClassName, fragment.UnfulfilledComputeName, fragment.Functions);
+            }
+
+            _partialFragments.Clear();
+
+            return _shaderSets;
+        }
     }
 }

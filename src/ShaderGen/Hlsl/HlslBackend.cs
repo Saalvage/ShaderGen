@@ -179,7 +179,9 @@ namespace ShaderGen.Hlsl
             }
 
             List<ResourceDefinition[]> resourcesBySet = setContext.Resources.GroupBy(rd => rd.Set)
-                .Select(g => g.ToArray()).ToList();
+                .OrderBy(x => x.Key)
+                .Select(g => g.ToArray())
+                .ToList();
 
             HashSet<ResourceDefinition> resourcesUsed
                 = ProcessFunctions(setName, entryPoint, out string funcStr, out string entryStr);
