@@ -87,12 +87,17 @@ namespace ShaderGen
                 node.Members
                     .OfType<FieldDeclarationSyntax>()
                     .Where(x => !x.Modifiers.Any(x => x.IsKind(SyntaxKind.ConstKeyword)))
+                    .Where(x => !x.AttributeLists.SelectMany(x => x.Attributes)
+                        .Any(x => x.Name.ToString().Contains("ResourceIgnore")))
                     .SelectMany(x => x.Declaration.Variables,
                         (x, y) => ((CSharpSyntaxNode) y, y.Identifier, x.Declaration.Type))
                     .Concat(node.Members // Auto-properties (no explicit getter/setter)
                         .OfType<PropertyDeclarationSyntax>()
-                        .Where(x => x.AccessorList != null
-                                    && x.AccessorList.Accessors.All(x => x.Body == null && x.ExpressionBody == null))
+                        .Where(x => 
+                            x.AccessorList?.Accessors.All(x => x.Body == null && x.ExpressionBody == null) == true
+                            || x.AttributeLists.SelectMany(x => x.Attributes)
+                                .Any(x => x.Name.ToString().Contains("TreatAsAutoProperty")))
+                        
                         .Select(x => ((CSharpSyntaxNode) x, x.Identifier, x.Type)))
             );
 
@@ -100,19 +105,26 @@ namespace ShaderGen
             {
                 string fieldName = identifier.Text.Trim();
                 string typeName = model.GetFullTypeName(type, out bool isArray);
+                TypeInfo typeInfo = model.GetTypeInfo(type);
                 int arrayElementCount = 0;
+                ITypeSymbol elementType = null;
                 if (isArray)
                 {
+                    elementType = ((IArrayTypeSymbol)typeInfo.Type)!.ElementType;
                     arrayElementCount = GetArrayCountValue(declaration, model);
                 }
 
-                TypeInfo typeInfo = model.GetTypeInfo(type);
+                if (!isArray && typeName == "System.Span`1" && TryGetArrayCountValue(declaration, model, out arrayElementCount))
+                {
+                    isArray = true;
+                    elementType = ((INamedTypeSymbol)typeInfo.Type)!.TypeArguments[0];
+                    typeName = ((INamedTypeSymbol)model.GetTypeInfo(type).Type)!.TypeArguments[0].GetFullMetadataName();
+                }
 
                 AlignmentInfo fieldSizeAndAlignment;
 
-                if (typeInfo.Type.Kind == SymbolKind.ArrayType)
+                if (isArray)
                 {
-                    ITypeSymbol elementType = ((IArrayTypeSymbol)typeInfo.Type).ElementType;
                     AlignmentInfo elementSizeAndAlignment = TypeSizeCache.Get(elementType);
                     fieldSizeAndAlignment = new AlignmentInfo(
                         elementSizeAndAlignment.CSharpSize * arrayElementCount,
@@ -145,16 +157,27 @@ namespace ShaderGen
             return true;
         }
 
-        private static int GetArrayCountValue(CSharpSyntaxNode vds, SemanticModel semanticModel)
+        private static bool TryGetArrayCountValue(CSharpSyntaxNode vds, SemanticModel semanticModel, out int arraySize)
         {
             AttributeSyntax[] arraySizeAttrs = Utilities.GetMemberAttributes(vds, "ArraySize");
             if (arraySizeAttrs.Length != 1)
             {
+                arraySize = 0;
+                return false;
+            }
+            AttributeSyntax arraySizeAttr = arraySizeAttrs[0];
+            arraySize = GetAttributeArgumentIntValue(arraySizeAttr, 0, semanticModel);
+            return true;
+        }
+
+        private static int GetArrayCountValue(CSharpSyntaxNode vds, SemanticModel semanticModel)
+        {
+            if (!TryGetArrayCountValue(vds, semanticModel, out int arraySize))
+            {
                 throw new ShaderGenerationException(
                     "Array fields in structs must have a constant size specified by an ArraySizeAttribute.");
             }
-            AttributeSyntax arraySizeAttr = arraySizeAttrs[0];
-            return GetAttributeArgumentIntValue(arraySizeAttr, 0, semanticModel);
+            return arraySize;
         }
 
         private static int GetAttributeArgumentIntValue(AttributeSyntax attr, int index, SemanticModel semanticModel)

@@ -232,8 +232,9 @@ namespace ShaderGen
 
         public static bool IsAutoProperty(IPropertySymbol propertySymbol)
             => propertySymbol.ContainingType.GetMembers()
-                .OfType<IFieldSymbol>()
-                .Any(x => SymbolEqualityComparer.Default.Equals(x.AssociatedSymbol, propertySymbol));
+                   .OfType<IFieldSymbol>()
+                   .Any(x => SymbolEqualityComparer.Default.Equals(x.AssociatedSymbol, propertySymbol))
+               || propertySymbol.GetAttributes().Any(x => x.AttributeClass?.Name == nameof(TreatAsAutoPropertyAttribute));
 
         internal static string JoinIgnoreNull(string separator, IEnumerable<string> value)
         {
